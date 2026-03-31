@@ -1,0 +1,12 @@
+# Entorno virtual
+venv/
+
+# Archivos de caché de Python
+**/__pycache__/
+*.pyc
+
+# Configuración y secretos (Muy importante)
+.env
+
+# Streamlit (opcional, si no quieres subir configuraciones locales)
+.streamlit/config.toml

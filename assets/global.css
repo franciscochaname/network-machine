@@ -1,0 +1,710 @@
+/* ================================================================
+   NETOPS CENTER — SISTEMA DE ESTILOS GLOBAL
+   v3.0 — Security Operations Console
+   
+   Este archivo contiene TODOS los estilos del sistema.
+   No colocar CSS inline en archivos Python.
+   ================================================================ */
+
+
+/* ===== 1. RESET Y BASE ===== */
+
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+.js-plotly-plot { border-radius: 10px; overflow: hidden; }
+[data-testid="collapsedControl"] { display: flex !important; color: #00F0FF; }
+div[data-baseweb="select"],
+div[data-baseweb="select"] * { cursor: pointer !important; }
+
+
+/* ===== 2. TIPOGRAFÍA ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+
+/* ===== 3. SIDEBAR PREMIUM ===== */
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0a0c10 0%, #111318 50%, #0d0f14 100%) !important;
+    border-right: 1px solid rgba(0, 240, 255, 0.08);
+}
+[data-testid="stSidebar"] .stMarkdown h3 {
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.5px;
+}
+
+
+/* ===== 4. ANIMACIONES GLOBALES ===== */
+
+@keyframes gradient-shift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes float-up {
+    0%, 100% { transform: translateY(0px); }
+    50%      { transform: translateY(-12px); }
+}
+
+@keyframes pulse-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.4); }
+    70%  { box-shadow: 0 0 0 15px rgba(0, 240, 255, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+}
+
+@keyframes pulse-green {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 255, 170, 0.4); }
+    70%  { box-shadow: 0 0 0 10px rgba(0, 255, 170, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 255, 170, 0); }
+}
+
+@keyframes scan-line {
+    0%   { top: -5%; }
+    100% { top: 105%; }
+}
+
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ===== 5. LOGIN — PANTALLA AISLADA ===== */
+
+.login-wrapper {
+    min-height: 72vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fade-in 0.6s ease-out;
+}
+
+.login-card {
+    background: rgba(17, 19, 24, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 240, 255, 0.12);
+    border-radius: 20px;
+    padding: 45px 40px 35px;
+    max-width: 440px;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    box-shadow:
+        0 25px 60px rgba(0, 0, 0, 0.5),
+        0 0 80px rgba(0, 240, 255, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.login-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -50%; right: -50%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.5), transparent);
+}
+.login-card::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.15), transparent);
+    animation: scan-line 4s linear infinite;
+    pointer-events: none;
+}
+
+.login-icon {
+    text-align: center;
+    font-size: 3.5em;
+    margin-bottom: 5px;
+    animation: float-up 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.3));
+}
+
+.login-title {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.8em;
+    font-weight: 700;
+    background: linear-gradient(135deg, #00F0FF 0%, #B100FF 50%, #FF007F 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 4s ease infinite;
+    margin: 5px 0 3px;
+}
+
+/* ===== NUEVO LOGIN CLARO (LIGHT THEME) ===== */
+.login-wrapper-light {
+    display: flex;
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    animation: fade-in 0.6s ease-out;
+}
+
+.login-card-light {
+    padding: 3rem;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    color: #1e293b;
+}
+
+.login-title-light {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2em;
+    font-weight: 800;
+    background: linear-gradient(135deg, #1e293b, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+}
+
+.login-subtitle-light {
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+
+.login-subtitle {
+    text-align: center;
+    color: #555;
+    font-size: 0.85em;
+    margin-bottom: 25px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.login-version {
+    text-align: center;
+    color: #333;
+    font-size: 0.7em;
+    margin-top: 20px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.login-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.login-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #00FFAA;
+    animation: pulse-ring 2s infinite;
+}
+
+.login-status-text {
+    color: #00FFAA;
+    font-size: 0.72em;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+
+/* ===== 6. KPI CARDS ===== */
+
+.kpi-card {
+    background: linear-gradient(145deg, rgba(20, 22, 28, 0.95), rgba(13, 15, 20, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 22px;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+    animation: fade-in 0.5s ease-out;
+}
+.kpi-card:hover {
+    border-color: rgba(0, 240, 255, 0.2);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.4);
+}
+
+.kpi-label {
+    color: #777;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 0;
+    font-weight: 500;
+}
+
+.kpi-value {
+    color: white;
+    font-size: 30px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    margin: 10px 0;
+    line-height: 1;
+}
+
+.kpi-suffix {
+    font-size: 16px;
+    color: #555;
+    font-weight: 400;
+}
+
+.kpi-bar {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.kpi-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+
+/* ===== 7. INTERFACE CARDS (Overview) ===== */
+
+.iface-card {
+    background: rgba(26, 28, 35, 0.8);
+    padding: 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    text-align: center;
+    transition: all 0.3s ease;
+    animation: fade-in 0.5s ease-out;
+}
+.iface-card:hover {
+    border-color: rgba(177, 0, 255, 0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.iface-name {
+    color: white;
+    margin: 0 0 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    letter-spacing: -0.3px;
+}
+
+.iface-rx {
+    color: #00F0FF;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin: 5px 0;
+}
+
+.iface-tx {
+    color: #FF007F;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    margin: 0;
+}
+
+.iface-unit {
+    font-size: 11px;
+    color: #555;
+}
+
+
+/* ===== 8. STATUS BAR ===== */
+
+.status-bar {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    background: rgba(0, 240, 255, 0.03);
+    border: 1px solid rgba(0, 240, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    animation: fade-in 0.4s ease-out;
+}
+
+.status-dot-online {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #00FFAA;
+    box-shadow: 0 0 8px rgba(0, 255, 170, 0.5);
+    animation: pulse-green 2s infinite;
+}
+
+.status-label {
+    color: #888;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.status-value {
+    color: #ccc;
+    font-weight: 600;
+}
+
+.status-sep {
+    color: #333;
+    font-size: 12px;
+}
+
+
+/* ===== 9. USER DONUT (Overview) ===== */
+
+.user-summary {
+    background: rgba(26, 28, 35, 0.8);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.user-lan {
+    color: #00FFAA;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.user-vpn {
+    color: #B100FF;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+/* ===== 10. SIDEBAR COMPONENTS ===== */
+
+.sidebar-profile {
+    background: rgba(0, 240, 255, 0.04);
+    border: 1px solid rgba(0, 240, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    animation: fade-in 0.3s ease-out;
+}
+
+.sidebar-profile-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #00F0FF, #B100FF);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: #0D0F14;
+}
+
+.sidebar-username {
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.sidebar-role {
+    color: #00F0FF;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sidebar-section-label {
+    color: #888;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.sidebar-refresh-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 2px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+
+/* ===== 11. BADGES ===== */
+
+.sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 255, 170, 0.08);
+    border: 1px solid rgba(0, 255, 170, 0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #00FFAA;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.alert-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 75, 75, 0.08);
+    border: 1px solid rgba(255, 75, 75, 0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #FF4B4B;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+
+/* ===== 12. ALERTAS AIOps ===== */
+
+.aiops-alert {
+    background: rgba(255, 75, 75, 0.08);
+    border: 1px solid rgba(255, 75, 75, 0.25);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: fade-in 0.4s ease-out;
+}
+
+.aiops-alert-icon {
+    font-size: 1.8em;
+}
+
+.aiops-alert-title {
+    color: #FF4B4B;
+    font-weight: 700;
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.aiops-alert-body {
+    color: #ccc;
+    font-size: 13px;
+    margin-top: 3px;
+}
+
+
+/* ===== 13. EMPTY STATES ===== */
+
+.empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    animation: fade-in 0.5s ease-out;
+}
+
+.empty-state-icon {
+    font-size: 4em;
+    margin-bottom: 15px;
+    opacity: 0.3;
+}
+
+.empty-state-title {
+    color: #666;
+    font-weight: 300;
+}
+
+.empty-state-desc {
+    color: #444;
+    max-width: 400px;
+    margin: 10px auto;
+}
+
+
+/* ===== 14. TABS ===== */
+
+.stTabs [data-baseweb="tab-list"] { gap: 6px; }
+.stTabs [data-baseweb="tab"] {
+    border-radius: 10px 10px 0 0;
+    padding: 12px 24px;
+    font-weight: 500;
+}
+
+
+/* ===== 15. FOOTER ===== */
+
+.soc-footer {
+    text-align: center;
+    padding: 20px;
+    color: #333;
+    font-size: 11px;
+    border-top: 1px solid rgba(255, 255, 255, 0.03);
+    margin-top: 50px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+}
+
+.soc-footer span {
+    color: #00F0FF;
+}
+
+
+/* ===== 16. HEALTH SCORE ===== */
+
+.health-gauge {
+    background: linear-gradient(145deg, rgba(20, 22, 28, 0.95), rgba(13, 15, 20, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+    animation: fade-in 0.5s ease-out;
+}
+
+.health-grade {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1;
+    margin: 5px 0;
+}
+
+.health-label {
+    font-size: 13px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 5px;
+}
+
+.health-breakdown {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.health-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 11px;
+}
+
+.health-item-label {
+    color: #666;
+}
+
+.health-item-value {
+    color: #ccc;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+
+/* ===== 17. NETWORK MAP ===== */
+
+.map-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 12px;
+    background: rgba(26, 28, 35, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+
+.map-stat-item {
+    text-align: center;
+}
+
+.map-stat-value {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #00F0FF;
+}
+
+.map-stat-label {
+    font-size: 10px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.map-router-card {
+    background: rgba(26, 28, 35, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+}
+
+.map-router-card:hover {
+    border-color: rgba(0, 240, 255, 0.15);
+    background: rgba(26, 28, 35, 0.9);
+}
+
+.map-router-name {
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.map-router-ip {
+    color: #00F0FF;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.map-router-location {
+    color: #555;
+    font-size: 11px;
+}
+
+
+/* ===== 18. HISTORY TIME-RANGE ===== */
+
+.history-range {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.history-range-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(26, 28, 35, 0.6);
+    color: #888;
+    transition: all 0.2s ease;
+}
+
+.history-range-btn:hover {
+    border-color: rgba(0, 240, 255, 0.2);
+    color: white;
+}
+
+.history-range-btn.active {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: #00F0FF;
+    color: #00F0FF;
+}

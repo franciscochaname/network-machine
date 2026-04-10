@@ -124,12 +124,12 @@ def network_traceroute(target: str, max_hops: int = 20, timeout: int = 2) -> lis
     return [{'hop': 1, 'ip': 'N/A', 'rtt': 'N/A', 'status': 'Scapy no disponible'}]
 
 
-def system_ping(target: str) -> str:
+def system_ping(target: str, count: int = 4) -> str:
     import subprocess
     import platform
     param = '-n' if platform.system().lower() == 'windows' else '-c'
     try:
-        out = subprocess.check_output(['ping', param, '10', target], stderr=subprocess.STDOUT, text=True, encoding='cp850', errors='ignore')
+        out = subprocess.check_output(['ping', param, str(count), target], stderr=subprocess.STDOUT, text=True, encoding='cp850', errors='ignore')
         return out
     except subprocess.CalledProcessError as e:
         return str(e.output)

@@ -11,6 +11,7 @@ _ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets')
 
 def load_global_css():
     """Carga e inyecta el archivo CSS global del sistema."""
+    st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>', unsafe_allow_html=True)
     css_path = os.path.join(_ASSETS_DIR, 'global.css')
     with open(css_path, 'r', encoding='utf-8') as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)

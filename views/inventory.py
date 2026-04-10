@@ -2,6 +2,7 @@ import streamlit as st
 from database.db_models import SessionLocal, Router
 from core.geolocation import auto_geolocate_router, geolocate_ip, is_public_ip
 from core.router_api import RouterManager
+from core.crypto import encrypt_password
 
 def render_inventory():
     st.title("⚙️ Gestión de Inventario de Nodos")
@@ -27,7 +28,7 @@ def render_inventory():
                     st.markdown(f"**Usuario:** `{r.api_user}`")
                 with col3:
                     if r.latitude and r.longitude:
-                        st.markdown(f"🌍 `{r.latitude:.4f}, {r.longitude:.4f}`")
+                        st.markdown(f":material/public: `{r.latitude:.4f}, {r.longitude:.4f}`")
                         if r.wan_ip:
                             st.caption(f"WAN: {r.wan_ip}")
                     else:
@@ -87,7 +88,7 @@ def render_inventory():
                                 router_edit.wan_ip = f"{geo.get('wan_ip', '')} ({tipo_ip})"
                                 router_edit.location = f"{geo.get('city', '')}, {geo.get('country', '')}"
                                 db.commit()
-                                st.success(f"✅ Ubicado en {geo.get('city')} - Proveedor asgina: {tipo_ip}")
+                                st.success(f":material/task_alt: Ubicado en {geo.get('city')} - Proveedor asgina: {tipo_ip}")
                                 st.rerun()
                             else:
                                 st.warning("No se pudo determinar IP pública/ubicación.")
@@ -99,7 +100,7 @@ def render_inventory():
                     st.success(f"📍 Actual: {router_edit.location} ({router_edit.latitude:.4f}, {router_edit.longitude:.4f})")
             
             # --- GEO BSSID (Wi-Fi Precision) ---
-            with st.expander("🛰️ Geolocalización Precisa por BSSID (Wi-Fi Extrema Precisión)"):
+            with st.expander(":material/satellite_alt: Geolocalización Precisa por BSSID (Wi-Fi Extrema Precisión)"):
                 st.caption("El router escaneará las redes Wi-Fi vecinas y enviará sus MAC addresses (BSSID) a una base de datos para triangular la posición a nivel de edificio (< 50m).")
                 with st.form("bssid_geo_form"):
                     col_prov, col_iface = st.columns([1, 1])
@@ -136,14 +137,14 @@ def render_inventory():
                                             router_edit.longitude = geo['lon']
                                             db.commit()
                                             
-                                            st.success(f"✅ ¡Triangulación exitosa! Precisión estimada: {geo.get('accuracy', 'N/A')} metros.")
+                                            st.success(f":material/task_alt: ¡Triangulación exitosa! Precisión estimada: {geo.get('accuracy', 'N/A')} metros.")
                                             st.markdown(f"**Coordenadas Capturadas:** `{geo['lat']}, {geo['lon']}` (Powered by {geo.get('country', 'BSSID Database')})")
                                             st.rerun()
                                         else:
-                                            st.error(f"❌ La base de datos de {api_provider.split(' ')[0]} no encontró el edificio para estas redes Wi-Fi o la conexión expiró.")
+                                            st.error(f":material/cancel: La base de datos de {api_provider.split(' ')[0]} no encontró el edificio para estas redes Wi-Fi o la conexión expiró.")
                                             st.write("Redes encontradas:", ", ".join([ap.get('ssid','Hidden') for ap in scan_results]))
                                     else:
-                                        st.error(f"⚠️ No se detectaron redes vecinas en {wifi_iface}. Verifica que exista y que el equipo tenga Wi-Fi.")
+                                        st.error(f":material/warning_amber: No se detectaron redes vecinas en {wifi_iface}. Verifica que exista y que el equipo tenga Wi-Fi.")
                                 else:
                                     st.error("Error conectando al router.")
 
@@ -155,7 +156,7 @@ def render_inventory():
                 e_pass = col_b.text_input("Nueva Contraseña (vacío = mantener actual)", type="password")
                 e_location = col_a.text_input("Ubicación", router_edit.location or "")
 
-                st.markdown("##### 🌍 Coordenadas (Opcional — o usa Auto-Detectar)")
+                st.markdown("##### :material/public: Coordenadas (Opcional — o usa Auto-Detectar)")
                 col_lat, col_lon = st.columns(2)
                 e_lat = col_lat.number_input("Latitud", value=router_edit.latitude or 0.0, format="%.6f", step=0.001)
                 e_lon = col_lon.number_input("Longitud", value=router_edit.longitude or 0.0, format="%.6f", step=0.001)
@@ -165,7 +166,7 @@ def render_inventory():
                     import ipaddress
                     error = False
                     if not e_name.strip() or not e_ip.strip() or not e_user.strip():
-                        st.error("⚠️ Nombre, IP y Usuario son obligatorios.")
+                        st.error(":material/warning_amber: Nombre, IP y Usuario son obligatorios.")
                         error = True
                     try:
                         # Allow domains by not strictly enforcing IP unless it looks like one.
@@ -173,7 +174,7 @@ def render_inventory():
                         if any(c.isdigit() for c in e_ip) and not any(c.isalpha() for c in e_ip):
                             ipaddress.ip_address(e_ip)
                     except ValueError:
-                        st.error("⚠️ Formato de Dirección IP o Hostname inválido. Verifica que sea una IP válida (ej. 192.168.1.1) o un nombre de host sin caracteres raros.")
+                        st.error(":material/warning_amber: Formato de Dirección IP o Hostname inválido. Verifica que sea una IP válida (ej. 192.168.1.1) o un nombre de host sin caracteres raros.")
                         error = True
                         
                     if not error:
@@ -182,7 +183,7 @@ def render_inventory():
                         router_edit.api_user = e_user.strip()
                         router_edit.location = e_location.strip()
                         if e_pass:
-                            router_edit.api_pass_encrypted = e_pass
+                            router_edit.api_pass_encrypted = encrypt_password(e_pass)
                         if e_lat != 0.0:
                             router_edit.latitude = e_lat
                         if e_lon != 0.0:
@@ -192,7 +193,7 @@ def render_inventory():
                         st.success("Cambios aplicados correctamente.")
                         st.rerun()
 
-                if col_cancel.form_submit_button("❌ Cancelar", use_container_width=True):
+                if col_cancel.form_submit_button(":material/cancel: Cancelar", use_container_width=True):
                     del st.session_state['edit_router_id']
                     st.rerun()
 
@@ -209,7 +210,7 @@ def render_inventory():
             r_pass = col2.text_input("Contraseña API", type="password")
             r_location = col1.text_input("Ubicación (Ej: Tegucigalpa, Honduras)", value="")
 
-            st.markdown("##### 🌍 Coordenadas (Opcional — se detectarán automáticamente al sincronizar)")
+            st.markdown("##### :material/public: Coordenadas (Opcional — se detectarán automáticamente al sincronizar)")
             col_lat, col_lon = st.columns(2)
             r_lat = col_lat.number_input("Latitud", value=0.0, format="%.6f", step=0.001)
             r_lon = col_lon.number_input("Longitud", value=0.0, format="%.6f", step=0.001)
@@ -219,25 +220,25 @@ def render_inventory():
                 import ipaddress
                 error = False
                 if not r_name.strip() or not r_ip.strip() or not r_user.strip() or not r_pass:
-                    st.error("⚠️ Nombre, IP, Usuario y Contraseña son obligatorios.")
+                    st.error(":material/warning_amber: Nombre, IP, Usuario y Contraseña son obligatorios.")
                     error = True
                 try:
                     if any(c.isdigit() for c in r_ip) and not any(c.isalpha() for c in r_ip):
                         ipaddress.ip_address(r_ip)
                 except ValueError:
-                    st.error("⚠️ Formato de Dirección IP o Hostname inválido. Verifica que sea una IP válida (ej. 192.168.1.1) o un nombre de host sin caracteres raros.")
+                    st.error(":material/warning_amber: Formato de Dirección IP o Hostname inválido. Verifica que sea una IP válida (ej. 192.168.1.1) o un nombre de host sin caracteres raros.")
                     error = True
                 
                 if not error:
                     new_router = Router(
                         name=r_name.strip(), ip_address=r_ip.strip(), api_user=r_user.strip(),
-                        api_pass_encrypted=r_pass, location=r_location or "Sede Nueva",
+                        api_pass_encrypted=encrypt_password(r_pass), location=r_location or "Sede Nueva",
                         latitude=r_lat if r_lat != 0.0 else None,
                         longitude=r_lon if r_lon != 0.0 else None
                     )
                     db.add(new_router)
                     db.commit()
-                    st.success("✅ Nodo agregado exitosamente. Las coordenadas se detectarán automáticamente en la primera sincronización.")
+                    st.success(":material/task_alt: Nodo agregado exitosamente. Las coordenadas se detectarán automáticamente en la primera sincronización.")
                     st.rerun()
 
     db.close()

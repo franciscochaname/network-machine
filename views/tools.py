@@ -21,13 +21,13 @@ def render_help_tip(key: str, content: str, icon: str = "ℹ️"):
 
 
 def render_tools():
-    st.title("🔧 Herramientas NOC Avanzadas")
+    st.title(":material/handyman: Herramientas NOC Avanzadas")
     st.markdown("Suite de ingeniería de redes: Scanner, Calculadora CIDR, Terminal SSH Multi-Vendor.")
 
     tab_scanner, tab_cidr, tab_ssh = st.tabs([
-        "🔍 Network Scanner",
-        "📐 Calculadora CIDR",
-        "💻 Terminal SSH"
+        ":material/search: Network Scanner",
+        ":material/architecture: Calculadora CIDR",
+        ":material/computer: Terminal SSH"
     ])
 
     # ==========================================
@@ -36,14 +36,14 @@ def render_tools():
     with tab_scanner:
         # Estado de Scapy
         if is_scapy_ready():
-            st.success("🟢 Motor Scapy activo — Escaneo de paquetes disponible")
+            st.success(":material/check_circle: Motor Scapy activo — Escaneo de paquetes disponible")
         else:
-            st.warning("⚠️ Scapy no disponible (instalar Npcap). Usando escáner por socket como fallback.")
+            st.warning(":material/warning_amber: Scapy no disponible (instalar Npcap). Usando escáner por socket como fallback.")
 
         col_type, col_ports = st.columns(2)
         with col_type:
             scan_type = st.radio("Tipo de Escaneo:", [
-                "TCP Port Scan", "ARP Discovery", "Traceroute", "Ping"
+                "TCP Port Scan", "ARP Discovery", "Ping Local"
             ], horizontal=True)
             
         with col_ports:
@@ -58,13 +58,13 @@ def render_tools():
                 ], horizontal=True)
 
         if "TCP Port Scan" in scan_type:
-            st.markdown("#### 🎯 Escaneo de Puertos TCP")
+            st.markdown("#### :material/api: Escaneo de Puertos TCP")
             render_help_tip("tcp", """
             **Propósito:** Auditar la seguridad buscando servicios abiertos o expuestos a internet.\n
-            🚨 **Casos de Emergencia:**
+            :material/emergency: **Casos de Emergencia:**
             - **Caídas de Servicio:** Saber inmediatamente si el puerto de tu BD (3306) o Web (443) se cerró inesperadamente.
             - **Vulnerabilidades:** Detectar si un troyano abrió un puerto oscuro o si dejaste expuesto el Winbox (8291) al público.
-            """, icon="🛡️")
+            """, icon=":material/security:")
 
             col1, col2 = st.columns([2, 1])
             with col1:
@@ -77,7 +77,7 @@ def render_tools():
                 if custom_text:
                     custom_ports = [int(p.strip()) for p in custom_text.split(',') if p.strip().isdigit()]
 
-            if st.button("⚡ Iniciar Escaneo", type="primary", key="btn_portscan"):
+            if st.button(":material/bolt: Iniciar Escaneo", type="primary", key="btn_portscan"):
                 if target_ip:
                     ports_map = {
                         "Top 20 Comunes": None,
@@ -92,15 +92,15 @@ def render_tools():
                         results = tcp_port_scan(target_ip, ports)
 
                     if results:
-                        st.success(f"🎯 {len(results)} puerto(s) abierto(s) encontrado(s)")
+                        st.success(f":material/api: {len(results)} puerto(s) abierto(s) encontrado(s)")
                         df = pd.DataFrame(results)
                         
                         def evaluar_riesgo_puerto(port):
                             críticos = [21, 23, 3389, 445, 135, 139] # Telnet, RDP, SMB
                             atencion = [22, 3306, 5432, 8291, 27017] # SSH, DBs, Winbox
-                            if port in críticos: return "🔴 CRÍTICO (Inseguro)"
-                            if port in atencion: return "🟡 Precaución (Gestión)"
-                            return "🟢 Normal (Servicio Público)"
+                            if port in críticos: return ":material/error: CRÍTICO (Inseguro)"
+                            if port in atencion: return ":material/warning: Precaución (Gestión)"
+                            return ":material/check_circle: Normal (Servicio Público)"
 
                         df['Riesgo de Seguridad'] = df['port'].apply(evaluar_riesgo_puerto)
                         df.rename(columns={'port': 'Puerto', 'state': 'Estado', 'service': 'Servicio', 'protocol': 'Protocolo'}, inplace=True)
@@ -114,17 +114,17 @@ def render_tools():
                         
                         criticos_cnt = len(df[df['Riesgo de Seguridad'].str.contains('CRÍTICO')])
                         if criticos_cnt > 0:
-                            st.warning(f"⚠️ ¡ATENCIÓN! Se detectaron {criticos_cnt} puerto(s) críticos abiertos. Es urgente cerrarlos si están expuestos a internet directo.")
+                            st.warning(f":material/warning_amber: ¡ATENCIÓN! Se detectaron {criticos_cnt} puerto(s) críticos abiertos. Es urgente cerrarlos si están expuestos a internet directo.")
                     else:
-                        st.info("✅ Excelente: No se encontraron puertos abiertos en los puertos escaneados (Servidor blindado).")
+                        st.info(":material/task_alt: Excelente: No se encontraron puertos abiertos en los puertos escaneados (Servidor blindado).")
                 else:
                     st.warning("Ingresa una IP o dominio.")
 
         elif "ARP Discovery" in scan_type:
-            st.markdown("#### 🌐 Descubrimiento ARP (Hardware)")
+            st.markdown("#### :material/language: Descubrimiento ARP (Hardware)")
             render_help_tip("arp", """
             **Propósito:** Mapeo implacable de Nivel 2. Encuentra equipos físicos conectados a tu subred, ¡incluso si su Firewall de Windows bloquea el Ping!\n
-            🚨 **Casos de Emergencia:**
+            :material/emergency: **Casos de Emergencia:**
             - **Intrusos Wi-Fi/LAN:** Identificar rápidamente si hay dispositivos no reconocidos "robando" internet ocultos en la red.
             - **Conflictos de IP:** Encontrar la MAC address del equipo rebelde que se asignó una IP estática equivocada tirando otros servicios.
             """, icon="📡")
@@ -150,7 +150,7 @@ def render_tools():
                     return True
                 except: return False
 
-            if st.button("🔍 Escanear Subred", type="primary", key="btn_arpscan"):
+            if st.button(":material/search: Escanear Subred", type="primary", key="btn_arpscan"):
                 if cidr and is_valid_cidr(cidr):
                     with st.spinner(f"Enviando paquetes ARP a {cidr}..."):
                         devices = arp_scan(cidr)
@@ -163,10 +163,10 @@ def render_tools():
                         def icon_vendor(v):
                             v_low = str(v).lower()
                             if 'apple' in v_low: return f"🍏 {v}"
-                            if 'mikrotik' in v_low: return f"⚡ {v}"
-                            if 'cisco' in v_low: return f"🏢 {v}"
+                            if 'mikrotik' in v_low: return f":material/bolt: {v}"
+                            if 'cisco' in v_low: return f":material/domain: {v}"
                             if 'desconocido' in v_low: return f"❓ Desconocido/Oculto"
-                            return f"💻 {v}"
+                            return f":material/computer: {v}"
                             
                         df['Fabricante'] = df['Fabricante'].apply(icon_vendor)
                         
@@ -174,82 +174,18 @@ def render_tools():
                     else:
                         st.info("No se descubrieron dispositivos. Verifica que estés ejecutando la herramienta desde la misma red LAN del objetivo.")
                 else:
-                    st.error("⚠️ Por favor ingresa una subred CIDR válida (ej: 192.168.1.0/24).")
+                    st.error(":material/warning_amber: Por favor ingresa una subred CIDR válida (ej: 192.168.1.0/24).")
 
-        elif "Traceroute" in scan_type:
-            st.markdown("#### 🔗 Traceroute Visual (Rastreo de Saltos)")
-            render_help_tip("traceroute", """
-            **Propósito:** Diagnosticar la ruta que toman tus datos a través de internet o ruteos internos hasta llegar al destino final.\n
-            🚨 **Casos de Emergencia:**
-            - **Caída de Internet:** El Traceroute te revelará si la desconexión es culpa de tu router local, de la antena proveedora, o de una fibra cortada en tu ciudad.
-            - **Latencia Extrema (Lag):** Ver en qué "salto" específico del trayecto se están ahogando los tiempos de respuesta.
-            """, icon="🛤️")
 
-            target = st.text_input("Destino:", placeholder="8.8.8.8 o google.com")
-
-            if st.button("🚀 Ejecutar Traceroute", type="primary", key="btn_trace"):
-                if target:
-                    with st.spinner(f"Trazando ruta detallada hacia {target} (puede tomar 1-2 minutos)..."):
-                        output = system_traceroute(target)
-                        
-                        import re
-                        lines = output.split('\n')
-                        saltos = []
-                        timeout_consecutivos = 0
-                        last_hop = "0"
-                        diagnostico = "🟢 Ruta completada sin problemas graves (El tráfico llega a destino)."
-                        
-                        for line in lines:
-                            if not re.match(r'^\s*\d+', line): continue
-                            parts = line.split()
-                            hop_num = parts[0]
-                            asteriscos = line.count('*')
-                            
-                            ip_match = re.search(r'(\d+\.\d+\.\d+\.\d+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', line)
-                            ip = ip_match.group(1) if ip_match else "Desconocido u Oculto"
-                            
-                            tiempos = re.findall(r'(\d+)\s*ms|<1\s*ms', line)
-                            ms_str = f"~{tiempos[-1]} ms" if tiempos and tiempos[-1].isdigit() else "<1 ms" if tiempos else "Timeout"
-                            
-                            estado = "🟢 OK"
-                            if asteriscos >= 3:
-                                estado = "🔴 Bloqueado (Timeout)"
-                                ms_str = "N/A"
-                                timeout_consecutivos += 1
-                                if timeout_consecutivos == 1:
-                                    last_hop = hop_num
-                            elif asteriscos > 0:
-                                estado = "🟡 Inestable (Pérdida)"
-                                timeout_consecutivos = 0
-                            else:
-                                timeout_consecutivos = 0
-                                
-                            saltos.append({"Salto": hop_num, "Host / IP": ip, "Latencia Final": ms_str, "Estado": estado})
-                        
-                        if timeout_consecutivos >= 3:
-                            diagnostico = f"🚨 Tráfico Perdido: El ruteo sufre una caída total o bloqueo de Firewall severo a partir del salto {last_hop}. El paquete se descartó en el camino."
-                        
-                        st.subheader("📊 Análisis Diagnóstico de Traceroute")
-                        if "🟢" in diagnostico:
-                            st.success(diagnostico)
-                        else:
-                            st.error(diagnostico)
-                            
-                        if saltos:
-                            import pandas as pd
-                            st.dataframe(pd.DataFrame(saltos), hide_index=True, use_container_width=True)
-                            
-                        with st.expander("🛠️ Ver Salida Bruta Completa (Consola)", expanded=False):
-                            st.code(output, language='text')
 
         elif "Ping" in scan_type:
             st.markdown("#### 📡 Ping de Supervivencia (ICMP)")
             render_help_tip("ping", """
             **Propósito:** Prueba de vida y tiempo de respuesta fundamental hacia un host.\n
-            🚨 **Casos de Emergencia:**
+            :material/emergency: **Casos de Emergencia:**
             - **Servidor Caído:** Comprobar instantáneamente (1 paquete) si el equipo principal sigue encendido y respondiendo en red.
             - **Micro-cortes:** Si el RTT fluctúa masivamente o se pierden, confirma saturación del CPU o del canal físico.
-            """, icon="⚡")
+            """, icon=":material/bolt:")
             target = st.text_input("IP objetivo:", placeholder="8.8.8.8", key="ping_target")
             if st.button("📡 Enviar Pulso de 10 Paquetes (Ping)", type="primary", key="btn_ping"):
                 if target:
@@ -279,46 +215,46 @@ def render_tools():
                         c3.metric("Latencia Promedio", f"{promedio} ms")
                         c4.metric("Picos (Max RTT)", f"{pico} ms")
                         
-                        st.markdown("### 🧠 Diagnóstico de Estabilidad")
+                        st.markdown("### :material/psychology: Diagnóstico de Estabilidad")
                         if perdida >= 50:
-                            st.error("🚨 CRITICO: El enlace está caído o sufriendo micro-cortes fatales (Pérdida superior al 50%). Es imposible mantener sesiones activas o telefonía.")
+                            st.error(":material/emergency: CRITICO: El enlace está caído o sufriendo micro-cortes fatales (Pérdida superior al 50%). Es imposible mantener sesiones activas o telefonía.")
                         elif perdida > 0:
-                            st.warning(f"⚠️ PELIGRO: Conexión inestable. Se perdió el {perdida}% de los paquetes. Sufrirás desconexiones de VPN o cortes de voz/streaming constantes.")
+                            st.warning(f":material/warning_amber: PELIGRO: Conexión inestable. Se perdió el {perdida}% de los paquetes. Sufrirás desconexiones de VPN o cortes de voz/streaming constantes.")
                         elif promedio == 0 and perdida == 0 and not tiempos:
-                            st.error("❌ El host no procesó el ICMP o la ruta es inalcanzable (Revisar DNS o Firewall).")
+                            st.error(":material/cancel: El host no procesó el ICMP o la ruta es inalcanzable (Revisar DNS o Firewall).")
                         else:
                             if promedio > 150:
-                                st.warning(f"🟡 CONGESTIÓN DE RUTA: 0% pérdidas, pero latencia elevada ({promedio}ms). Enlace internacional, red saturada por exceso de tráfico, o conexión vía satélite.")
+                                st.warning(f":material/warning: CONGESTIÓN DE RUTA: 0% pérdidas, pero latencia elevada ({promedio}ms). Enlace internacional, red saturada por exceso de tráfico, o conexión vía satélite.")
                             else:
-                                st.success(f"✅ CONEXIÓN ÓPTIMA: Línea limpia. Excelente latencia ({promedio}ms) sin pérdida de información y totalmente estable para aplicaciones en tiempo real.")
+                                st.success(f":material/task_alt: CONEXIÓN ÓPTIMA: Línea limpia. Excelente latencia ({promedio}ms) sin pérdida de información y totalmente estable para aplicaciones en tiempo real.")
                                 
-                        with st.expander("🛠️ Ver Registro Original del SO (Consola)", expanded=False):
+                        with st.expander(":material/build: Ver Registro Original del SO (Consola)", expanded=False):
                             st.code(output, language='text')
 
     with tab_cidr:
-        st.markdown("#### 📐 Herramientas de Direccionamiento Inteligente (CIDR)")
+        st.markdown("#### :material/architecture: Herramientas de Direccionamiento Inteligente (CIDR)")
         st.caption("Arquitectura lógica — Powered by Netaddr")
 
         subtab_calc, subtab_classify, subtab_overlap = st.tabs([
-            "🔢 División de Subredes", "🏷️ Analizador Forense IP", "⚠️ Radar de Solapamientos (Conflictos)"
+            "🔢 División de Subredes", "🏷️ Analizador Forense IP", ":material/warning_amber: Radar de Solapamientos (Conflictos)"
         ])
 
         with subtab_calc:
             render_help_tip("cidr_calc", """
             **Propósito:** Es la base para diseñar y segmentar redes (Subnetting). Aquí puedes dividir grandes bloques de IPs en pedazos exactos. Te mostrará exactamente dónde inicia, dónde termina y qué tamaño tiene la red.
-            💡 **Casos Prácticos:** Si el ISP te entrega una subred `/27` o armaste un túnel VPN y no quieres gastar más IPs de las necesarias, escríbelo aquí para ver cuántas computadoras caben exactamente y cuál es el Gateway ideal.
-            """, icon="📐")
+            :material/lightbulb: **Casos Prácticos:** Si el ISP te entrega una subred `/27` o armaste un túnel VPN y no quieres gastar más IPs de las necesarias, escríbelo aquí para ver cuántas computadoras caben exactamente y cuál es el Gateway ideal.
+            """, icon=":material/architecture:")
             cidr_input = st.text_input("Dirección de Red o CIDR (Ej. 192.168.20.0/24):", placeholder="192.168.20.0/24", key="cidr_calc")
 
             if cidr_input:
                 info = get_subnet_info(cidr_input)
                 if info:
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("🌐 Identificador de Red (ID)", info['network'])
+                    c1.metric(":material/language: Identificador de Red (ID)", info['network'])
                     c2.metric("📡 IP de Broadcast (Fin)", info['broadcast'])
-                    c3.metric("👥 Equipos Soportados (Hosts)", f"{info['usable_hosts']:,}")
+                    c3.metric(":material/group: Equipos Soportados (Hosts)", f"{info['usable_hosts']:,}")
                     
-                    st.markdown("#### 📊 Desglose de Parámetros Clave")
+                    st.markdown("#### :material/bar_chart: Desglose de Parámetros Clave")
                     col_a, col_b, col_c = st.columns(3)
                     col_a.metric("Primer Host Asignable", info['first_host'])
                     col_b.metric("Último Host Asignable", info['last_host'])
@@ -327,7 +263,7 @@ def render_tools():
                     col_d, col_e, col_f = st.columns(3)
                     col_d.metric("Máscara de Subred", info['netmask'])
                     col_e.metric("Wildcard (Usable para OSPF)", info['wildcard'])
-                    col_f.metric("Naturaleza de IP", "Privada (LAN)" if info['is_private'] else "Pública (Internet) 🌍")
+                    col_f.metric("Naturaleza de IP", "Privada (LAN)" if info['is_private'] else "Pública (Internet) :material/public:")
 
                     with st.expander("📋 Exportar Secuencia de IPs (Ejemplo para OSPF/Acls/Inventario)"):
                         hosts = enumerate_hosts(cidr_input, limit=256)
@@ -336,7 +272,7 @@ def render_tools():
         with subtab_classify:
             render_help_tip("cidr_class", """
             **Propósito:** Auditoría forense del Nivel 3 (Capa de Red). Desnuda cualquier IP indicando de forma inmediata su composición y para qué la diseñó la organización mundial en sus orígenes.
-            💡 **Casos Prácticos:** Si detectas tráfico de red yendo a IPs extrañas como `169.254.x.x` (Cable desconectado/Fallido) o clases tipo D como `224.0.0.9`, el clasificador interpretará esos flujos automáticamente advirtiéndote y mostrándote conversiones directas usadas por programadores y firewalls duros.
+            :material/lightbulb: **Casos Prácticos:** Si detectas tráfico de red yendo a IPs extrañas como `169.254.x.x` (Cable desconectado/Fallido) o clases tipo D como `224.0.0.9`, el clasificador interpretará esos flujos automáticamente advirtiéndote y mostrándote conversiones directas usadas por programadores y firewalls duros.
             """, icon="🏷️")
             ip_input = st.text_input("Dirección Analítica IP (Ej. 10.15.5.1):", placeholder="192.168.20.1", key="ip_classify")
             if ip_input:
@@ -344,7 +280,7 @@ def render_tools():
                 if 'error' not in info:
                     c1, c2, c3 = st.columns(3)
                     c1.metric("🏷️ Categoría", info['classification'])
-                    c2.metric("📊 Clase Tradicional", info['net_class'])
+                    c2.metric(":material/bar_chart: Clase Tradicional", info['net_class'])
                     c3.metric("🔢 Estándar", f"IPv{info['version']}")
 
                     st.markdown(f"""
@@ -363,27 +299,27 @@ def render_tools():
                              "Difusión Masiva Grupal (Multicast)": info['is_multicast']}
                     cols = st.columns(len(props))
                     for i, (k, v) in enumerate(props.items()):
-                        cols[i].metric(k, "✅ SÍ" if v else "❌ NO")
+                        cols[i].metric(k, ":material/task_alt: SÍ" if v else ":material/cancel: NO")
 
         with subtab_overlap:
             render_help_tip("cidr_overlap", """
             **Propósito:** Interceptor Anti-Catástrofes de Enrutamiento. Analiza cruces invisibles donde los segmentos de host chocan.
-            🚨 **Emergencias en Túneles VPN:** El error mortal más frecuente es conectar la Sucursal Urbana que reparte la red DHCP `192.168.1.0/24` con otra Sucursal Externa que sin saberlo enrute exactamente su propio segmento interno idéntico `192.168.1.0/24`. Resultado: Choque masivo de ruteo cerrado, colapso de red para ambas plantas. Pon las redes a empatar aquí antes de programar los túneles y detectaremos el choque invisible.
-            """, icon="⚠️")
+            :material/emergency: **Emergencias en Túneles VPN:** El error mortal más frecuente es conectar la Sucursal Urbana que reparte la red DHCP `192.168.1.0/24` con otra Sucursal Externa que sin saberlo enrute exactamente su propio segmento interno idéntico `192.168.1.0/24`. Resultado: Choque masivo de ruteo cerrado, colapso de red para ambas plantas. Pon las redes a empatar aquí antes de programar los túneles y detectaremos el choque invisible.
+            """, icon=":material/warning_amber:")
             st.markdown("Introduce todos los bloques que pretendes unir para verificar superposiciones o choques de Redes (Una subred por línea):")
             subnets_text = st.text_area("Subredes, Túneles VPN o CIDRs:", placeholder="192.168.10.0/24\n192.168.10.128/25\n10.0.0.0/8",
                                         height=120, key="overlap_input")
 
-            if st.button("🔍 Analizar Colisiones de Ruteo", type="primary", key="btn_overlap"):
+            if st.button(":material/search: Analizar Colisiones de Ruteo", type="primary", key="btn_overlap"):
                 if subnets_text:
                     cidrs = [line.strip() for line in subnets_text.strip().split('\n') if line.strip()]
 
                     overlaps = check_subnet_overlap(cidrs)
                     if overlaps:
-                        st.error(f"🚨 ALERTA ROJA: {len(overlaps)} COLISIONES DETECTADAS. Las siguientes combinaciones resultarán en conflicto de bucle ciego de enrutamiento (Network Collision o Routing Loop):")
+                        st.error(f":material/emergency: ALERTA ROJA: {len(overlaps)} COLISIONES DETECTADAS. Las siguientes combinaciones resultarán en conflicto de bucle ciego de enrutamiento (Network Collision o Routing Loop):")
                         st.dataframe(pd.DataFrame(overlaps), hide_index=True, use_container_width=True)
                     else:
-                        st.success("✅ Certificado Operativo: Ninguna de las rutas especificadas choca con otra. Es seguro conectar/routear juntas estas sucursales u oficinas y armar los Túneles.")
+                        st.success(":material/task_alt: Certificado Operativo: Ninguna de las rutas especificadas choca con otra. Es seguro conectar/routear juntas estas sucursales u oficinas y armar los Túneles.")
 
                     aggregated = aggregate_cidrs(cidrs)
                     st.markdown(f"**Recomendación de Compresión de Rutas BGP/OSPF (Optimiza y Aligera el consumo en memoria RAM del procesador):**")
@@ -393,21 +329,21 @@ def render_tools():
     # 3. TERMINAL SSH MULTI-VENDOR (Netmiko)
     # ==========================================
     with tab_ssh:
-        st.markdown("#### 💻 Terminal de Ejecución Remota Multi-Vendor")
+        st.markdown("#### :material/computer: Terminal de Ejecución Remota Multi-Vendor")
         st.caption("Arquitectura CLI Universal — Powered by Netmiko")
         
         render_help_tip("ssh_terminal", """
         **Propósito:** Consola de Administración Centralizada. Te permite inyectar secuencias de comandos directamente en el núcleo físico (CLI) de routers o switches de cualquier marca del mundo, sin necesidad de Putty ni VPNs adicionales.
-        🚨 **Casos de Emergencia (NOC Activo):**
+        :material/emergency: **Casos de Emergencia (NOC Activo):**
         - **Recuperación tras Desastre:** Respaldar la configuración entera en texto plano de un router MikroTik o Cisco antes de que su Memoria Flash colapse permanentemente.
         - **Auditoría de Infección:** Tirar un comando manual oculto al sistema operativo del equipo para ver las tablas BGP o reglas de Firewall que fueron modificadas por un intruso.
-        """, icon="💻")
+        """, icon=":material/computer:")
 
         if not is_netmiko_ready():
             st.error("Netmiko no disponible. Instala con: pip install netmiko")
             return
 
-        st.success("🟢 Driver Netmiko activo: Soporte garantizado para MikroTik, Cisco, Juniper, Ubiquiti, y +70 marcas.")
+        st.success(":material/check_circle: Driver Netmiko activo: Soporte garantizado para MikroTik, Cisco, Juniper, Ubiquiti, y +70 marcas.")
 
         st.markdown("---")
         # Formulario de conexión
@@ -430,7 +366,7 @@ def render_tools():
                                     format_func=lambda x: device_types[x]['name'])
 
         st.markdown("---")
-        st.markdown("##### 🚀 Ejecución Táctica de Comandos")
+        st.markdown("##### :material/rocket_launch: Ejecución Táctica de Comandos")
         
         templates = get_command_templates(ssh_type)
 
@@ -447,7 +383,7 @@ def render_tools():
         st.markdown("<br>", unsafe_allow_html=True)
         col_exec, col_backup, col_esp = st.columns([2, 2, 4])
         with col_exec:
-            ejecutar = st.button("⚡ Fuego (Ejecutar en Host)", type="primary", use_container_width=True, key="btn_ssh_exec")
+            ejecutar = st.button(":material/bolt: Fuego (Ejecutar en Host)", type="primary", use_container_width=True, key="btn_ssh_exec")
         with col_backup:
             backup = st.button("💾 Extracción de Respaldo", use_container_width=True, key="btn_ssh_backup")
 
@@ -460,7 +396,7 @@ def render_tools():
                     success, msg = manager.connect()
 
                 if success:
-                    st.success(f"✅ Handshake exitoso: {msg}")
+                    st.success(f":material/task_alt: Handshake exitoso: {msg}")
 
                     with st.spinner("Compilando y ejecutando rutinas CLI..."):
                         if backup:
@@ -490,6 +426,6 @@ def render_tools():
                     else:
                         st.error(f"Fallo de Capa Aplicación: {output}")
                 else:
-                    st.error(f"❌ Fallo masivo de Autenticación o Ruta inaccesible: {msg}")
+                    st.error(f":material/cancel: Fallo masivo de Autenticación o Ruta inaccesible: {msg}")
             else:
-                st.error("⚠️ Operación Denegada: Todos los campos (Host, Usuario, Contraseña) son obligatorios para establecer el túnel SSH.")
+                st.error(":material/warning_amber: Operación Denegada: Todos los campos (Host, Usuario, Contraseña) son obligatorios para establecer el túnel SSH.")

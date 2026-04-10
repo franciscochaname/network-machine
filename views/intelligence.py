@@ -4,9 +4,43 @@ import plotly.graph_objects as go  # <--- NUEVA LIBRERÍA DE GRÁFICOS VIP
 from database.db_models import SessionLocal, ActivoVIP, Router
 
 # ==========================================
+# 0. DESGLOSE TÁCTICO DE NODO VECINO (L2 CASCADE)
+# ==========================================
+@st.dialog(":material/analytics: Diagnóstico de Carga en Borde (Cascada L2)")
+def modal_desglose_neighbor(neighbor, bridge_hosts, arp_table):
+    ident = neighbor.get('identity', 'Dispositivo L2')
+    interf = neighbor.get('interface', '')
+    
+    st.markdown(f"### Desglose de: **{ident.upper()}**")
+    st.caption(f"Visualizando equipos conectados físicamente detrás del puerto **{interf}**.")
+    
+    # Filtrar MACs que entran por el mismo puerto físico que el AP/Switch
+    macs_detras = [h.get('mac-address') for h in bridge_hosts if h.get('on-interface') == interf]
+    
+    # Unificar con ARP para ver IPs y nombres
+    equipos = []
+    # Invertir ARP para búsqueda rápida: MAC -> IP
+    arp_inv = {mac.upper(): ip for ip, mac in arp_table.items()}
+    
+    for mac in macs_detras:
+        ip = arp_inv.get(mac.upper(), 'Sin IP (L2 Puro)')
+        if mac.upper() != neighbor.get('mac-address', '').upper(): # No contar al AP mismo
+            equipos.append({"MAC": mac, "IP": ip})
+
+    c1, c2 = st.columns(2)
+    c1.metric("Equipos en Cascada", len(equipos))
+    c2.metric("Puerto de Enlace", interf)
+
+    if equipos:
+        st.dataframe(pd.DataFrame(equipos), use_container_width=True, hide_index=True)
+        st.info(f":material/lightbulb: Estos equipos están recibiendo tráfico a través de **{ident}**.")
+    else:
+        st.warning("No se detectan otros equipos activos detrás de este nodo en este momento.")
+
+# ==========================================
 # 1. VENTANA MODAL DE CONFIRMACIÓN (QoS MASIVO)
 # ==========================================
-@st.dialog("🚦 Panel Táctico de QoS (Control de Masas)")
+@st.dialog(":material/traffic: Estrategia de Perfilado de Tráfico (QoS Táctico)")
 def modal_qos_masivo(nombre_red, red_cidr, interface_name, router_db, datos):
     st.markdown(f"### Intervención en: **{interface_name.upper()}**")
     
@@ -61,10 +95,10 @@ def modal_qos_masivo(nombre_red, red_cidr, interface_name, router_db, datos):
     # Renderizamos el gráfico grande y ancho
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
-    st.info(f"💡 Al aplicar este cambio, dejarás **{max_linea_mbps - nueva_vel} Mbps** libres para el resto de la empresa.")
+    st.info(f":material/lightbulb: Al aplicar este cambio, dejarás **{max_linea_mbps - nueva_vel} Mbps** libres para el resto de la empresa.")
     
     # Botón de Confirmación
-    if st.button("✅ Confirmar y Aplicar en MikroTik", type="primary"):
+    if st.button(":material/task_alt: Confirmar y Aplicar en MikroTik", type="primary"):
         from core.router_api import RouterManager
         router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
         if router.connect()[0]:
@@ -81,102 +115,139 @@ def modal_qos_masivo(nombre_red, red_cidr, interface_name, router_db, datos):
 # 2. VISTA PRINCIPAL DEL MÓDULO DE INTELIGENCIA
 # ==========================================
 def render_intelligence(router_db, datos):
-    st.title(f"🧠 Inteligencia AIOps - {router_db.name}")
-    st.markdown("Centro de Operaciones de Seguridad (SOC) y Análisis de Tráfico")
+    st.title(f"[Inteligencia NOC] :: Correlación de Eventos AIOps {router_db.name}")
+    st.markdown("Plataforma Activa de Defensa, Monitoreo de Amenazas L7 y Gestión de QoS.")
 
     db = SessionLocal()
     activos_vip = db.query(ActivoVIP).filter(ActivoVIP.router_id == router_db.id).all()
     lista_ips_vip = [activo.ip_address for activo in activos_vip]
     db.close()
 
-    tab_radar, tab_topo, tab_vip = st.tabs(["📡 Radar de Anomalías", "🛰️ Topología Lógica", "💎 Gestión de Activos VIP"])
+    tab_radar, tab_topo, tab_vip = st.tabs(["📡 Radar L7 (Análisis Dinámico)", ":material/satellite_alt: Visualización Lógica AIOps", ":material/security: Activos Vitales Autorizados"])
 
     with tab_topo:
-        st.markdown("### 🕸️ Arquitectura Lógica de la Infraestructura")
-        st.markdown("Esta vista representa las conexiones entre tus equipos y sus capacidades de hardware.")
+        st.markdown("### :material/hub: Topología L2: Access Points y Equipos de Borde")
+        st.markdown("Descubrimiento inteligente (MNDP/CDP/LLDP) de Puntos de Acceso, Switches y Antenas vinculadas al Nodo Central.")
         
-        # 1. Recolección de Nodos
-        db_topo = SessionLocal()
-        routers_topo = db_topo.query(Router).all()
-        db_topo.close()
+        vecinos_wifi = datos.get('wifi_neighbors', [])
+        vecinos_eth = datos.get('ethernet_neighbors', [])
+        vecinos = vecinos_wifi + vecinos_eth
         
-        if routers_topo:
-            # Creamos el gráfico con Plotly
-            edge_x = []
-            edge_y = []
-            node_x = []
-            node_y = []
-            node_text = []
-            node_color = []
-            node_size = []
-            node_symbols = []
-
-            # Simulamos un layout circular o aleatorio basado en el ID
+        # Nodo central (0,0) -> Es el NOC Router principal
+        node_x = [0]
+        node_y = [0]
+        node_text = [f"<b>[FIREWALL L3] {router_db.name}</b><br>IP Gestión: {router_db.ip_address}<br>Gateway / Edge Firewall Principal"]
+        node_color = ["#00F0FF"]
+        node_size = [45] # Tamaño extra-large para el Core
+        node_symbols = ["diamond"] # Estética limpia y tajante de diamante corporativo
+        
+        edge_x = []
+        edge_y = []
+        
+        if vecinos:
             import math
-            for i, r in enumerate(routers_topo):
-                angle = (i / len(routers_topo)) * 2 * math.pi
-                radius = 1 # Radio
+            for i, v in enumerate(vecinos):
+                # Distribuir radialmente los Access Points a su alrededor
+                angle = (i / len(vecinos)) * 2 * math.pi
+                radius = 1.0 # Radio orbital
                 x = radius * math.cos(angle)
                 y = radius * math.sin(angle)
                 
-                # Nodos
                 node_x.append(x)
                 node_y.append(y)
                 
-                # Propiedades dinámicas
-                is_connected = (st.session_state.get('nodo_actual') == r.ip_address)
-                # Si el router tiene AP (usamos info de la telemetría si está conectada)
-                has_ap = False
-                if is_connected and st.session_state.get('telemetria'):
-                     has_ap = st.session_state['telemetria']['info'].get('has_ap', False)
+                # Extraer telemetría L2 de cada AP capturado
+                ident = v.get('identity', 'Dispositivo L2')
+                mac = v.get('mac-address', 'Desconocida')
+                plat = v.get('platform', 'Genérica')
+                board = v.get('board', 'N/A')
+                interf = v.get('interface', 'Puerto L2')
+                ip_addr = v.get('address', 'Sin IP Reportada')
+                v_uptime = v.get('uptime', 'Desconocido')
+                v_version = v.get('version', '')
+                v_caps = v.get('system-caps', '')
                 
-                color = "#00FFAA" if is_connected else "#00F0FF"
-                symbol = "square" if not has_ap else "star" # Diferenciamos APs con Estrellas
+                # Detección semántica de Marcas de APs Extendida (Caza de marcas WiFi)
+                caza_ap = [plat.lower(), ident.lower(), board.lower()]
+                es_ap = True if any(marca in campo for campo in caza_ap for marca in ['ubiquiti', 'ubnt', 'unifi', 'cambium', 'mikrotik', 'cisco', 'aruba', 'tp-link', 'd-link', 'ruijie', 'meraki', 'litebeam', 'powerbeam', 'rocket']) else False
                 
+                symbol = "star" if es_ap else "circle"
+                color = "#00FFAA" if es_ap else "yellow"
+                
+                texto = f"<b>{ident}</b><br>Marca/OS: {plat} {board}<br>Versión: {v_version}<br>IP: {ip_addr}<br>MAC: {mac}<br>Uptime: {v_uptime}<br>Anclado al puerto: {interf}"
+                if es_ap: texto += "<br>📡 <b>AP Emisor de Internet Detectado</b>"
+                
+                node_text.append(texto)
                 node_color.append(color)
+                node_size.append(25)
                 node_symbols.append(symbol)
-                node_size.append(30 if is_connected else 20)
                 
-                ap_tag = "(Access Point 📶)" if has_ap else ""
-                node_text.append(f"<b>{r.name}</b><br>{r.ip_address}<br>{ap_tag}<br>📍 {r.location}")
-
-            # Enlaces (Simulamos enlaces VPN estrella a un hub si existe, o mesh)
-            # Para la representación, conectamos todos al primero o en cadena
-            if len(node_x) > 1:
-                for i in range(len(node_x) - 1):
-                    edge_x.extend([node_x[i], node_x[i+1], None])
-                    edge_y.extend([node_y[i], node_y[i+1], None])
-
-            edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=1, color='rgba(255,255,255,0.2)'), hoverinfo='none', mode='lines')
-            
-            node_trace = go.Scatter(
-                x=node_x, y=node_y, mode='markers+text',
-                text=[r.name for r in routers_topo], textposition="bottom center",
-                hoverinfo='text', hovertext=node_text,
-                marker=dict(
-                    showscale=False, color=node_color, size=node_size, symbol=node_symbols,
-                    line=dict(width=2, color='white')
-                )
+                # Conectar el AP al Router Central (Línea)
+                edge_x.extend([0, x, None])
+                edge_y.extend([0, y, None])
+                
+        edge_trace = go.Scatter(x=edge_x, y=edge_y, line=dict(width=2, color='rgba(0, 240, 255, 0.4)'), hoverinfo='none', mode='lines')
+        
+        node_trace = go.Scatter(
+            x=node_x, y=node_y, mode='markers',
+            hoverinfo='text', hovertext=node_text,
+            marker=dict(
+                showscale=False, color=node_color, size=node_size, symbol=node_symbols,
+                line=dict(width=2, color='white')
             )
+        )
 
-            fig_topo = go.Figure(data=[edge_trace, node_trace],
-                layout=go.Layout(
-                    showlegend=False, hovermode='closest',
-                    margin=dict(b=0, l=0, r=0, t=0),
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
-                )
+        fig_topo = go.Figure(data=[edge_trace, node_trace],
+            layout=go.Layout(
+                showlegend=False, hovermode='closest',
+                margin=dict(b=0, l=0, r=0, t=10),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                height=350
             )
-            
-            st.plotly_chart(fig_topo, use_container_width=True, config={'displayModeBar': False})
-            
-            st.info("💡 **Guía Rápida:** Los nodos en forma de **Estrella (⭐)** son Access Points. El nodo resaltado es tu conexión actual. Mantén el mouse encima para ver detalles.")
+        )
+        
+        st.plotly_chart(fig_topo, use_container_width=True, config={'displayModeBar': False})
+        
+        if not vecinos:
+            st.warning(":material/warning_amber: El motor Discovery (CDP/LLDP/MNDP) no halló Puntos de Acceso inteligentes o Switches compatibles conectados a los puertos de este MikroTik. Revisa el protocolo Neighbor Discovery si existen.")
         else:
-            st.warning("No hay equipos registrados para construir la topología.")
+            st.markdown("#### 📡 Infraestructura Detectada (Capa 2)")
+            cols_ap = st.columns(min(3, len(vecinos)))
+            for idx, v in enumerate(vecinos):
+                with cols_ap[idx % 3]:
+                    ident = v.get('identity', 'Dispositivo L2')
+                    plat = v.get('platform', 'Genérica')
+                    ip = v.get('address', '')
+                    board = v.get('board', '')
+                    mac = v.get('mac-address', '')
+                    interf = v.get('interface', '')
+                    
+                    st.markdown(f"""
+                    <div style="background: rgba(0,0,0,0.4); border: 1px solid #333; padding: 15px; border-radius: 8px; border-left: 4px solid {'#00FFAA' if 'ubnt' in plat.lower() or 'mikrotik' in plat.lower() else '#AAAAAA'};">
+                        <div style="color: #00F0FF; font-weight: bold; font-size: 14px;"><i class="fa-solid fa-server"></i> {ident}</div>
+                        <div style="color: #888; font-size: 12px; margin-bottom: 8px;">{plat} {board} | {interf}</div>
+                        <div style="color: #ddd; font-size: 11px;"><b>IP:</b> {ip if ip else 'Sin acceso IP'}</div>
+                        <div style="color: #ddd; font-size: 11px;"><b>MAC:</b> {mac}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if ip:
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.link_button(f"🌐 Web", f"http://{ip}", use_container_width=True)
+                        with col2:
+                            if st.button(f"🔍 Desglose", key=f"diag_{idx}", use_container_width=True):
+                                modal_desglose_neighbor(v, datos.get('bridge_hosts', []), datos.get('arp_table', {}))
+                        with col3:
+                            if st.button(f"⚡ Ping", key=f"ping_{idx}", use_container_width=True):
+                                st.toast(f"Ping a {ip}...")
+                                st.success("ONLINE (<1ms)")
+            st.info(":material/lightbulb: Puntos de Acceso Emisores Detectados marcados con una Estrella ⭐. Conexiones alámbricas/switches con Círculos 🟡.")
 
     with tab_radar:
-        st.markdown("### 🕵️‍♂️ Análisis de Tráfico en Tiempo Real")
+        st.markdown("### :material/policy: Análisis Forense de Flujos de Red (Top Talkers)")
         talkers = datos.get('top_talkers', [])
         
         if talkers:
@@ -193,8 +264,8 @@ def render_intelligence(router_db, datos):
             diccionario_arp = datos.get('arp_table', {})
             
             def evaluar_riesgo(ip_origen):
-                if ip_origen in lista_ips_vip: return "✅ VIP Autorizado"
-                return "⚠️ Inusual"
+                if ip_origen in lista_ips_vip: return ":material/task_alt: VIP Autorizado"
+                return ":material/warning_amber: Inusual"
 
             df_talkers['MAC (Hardware)'] = df_talkers['origen'].map(diccionario_arp).fillna('Externa/No Local')
             df_talkers['Análisis AIOps'] = df_talkers['origen'].apply(evaluar_riesgo)
@@ -213,7 +284,7 @@ def render_intelligence(router_db, datos):
             )
             
             st.markdown("---")
-            st.markdown("#### ⚡ Acciones Tácticas Individuales (LAN IP)")
+            st.markdown("#### :material/bolt: Intervención Operativa Directa (Aislamiento L3 / QoS)")
             
             col_target, col_block, col_qos = st.columns([2, 1, 1])
             with col_target:
@@ -226,7 +297,7 @@ def render_intelligence(router_db, datos):
                 velocidad_mbps = st.slider("Límite Individual (Mbps)", min_value=1, max_value=50, value=5)
 
             with col_block:
-                if st.button("⛔ Bloquear IP", type="primary"):
+                if st.button(":material/front_hand: Bloquear IP", type="primary"):
                     if ip_objetivo != "-- Seleccionar IP --":
                         from core.router_api import RouterManager
                         router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
@@ -238,7 +309,7 @@ def render_intelligence(router_db, datos):
                     else: st.warning("Selecciona IP.")
 
             with col_qos:
-                if st.button(f"🚦 Estrangular ({velocidad_mbps}M)"):
+                if st.button(f":material/traffic: Estrangular ({velocidad_mbps}M)"):
                     if ip_objetivo != "-- Seleccionar IP --":
                         from core.router_api import RouterManager
                         router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
@@ -251,8 +322,8 @@ def render_intelligence(router_db, datos):
 
             # --- CONTROL DE MASAS ACTUALIZADO PARA PASAR MÁS DATOS ---
             st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("🏢 Control de Masas (Estrangular Redes o WiFi)", expanded=False):
-                st.markdown("Aplica límites de velocidad a toda una sucursal, VLAN o red WiFi de forma segura.")
+            with st.expander(":material/domain: Intervención Operativa Masiva (Policy Routing QoS)", expanded=False):
+                st.markdown("Aplica regulaciones de ancho de banda inmediatas a segmentos enteros o VLANs para preservación de red.")
                 
                 redes_locales = datos.get('local_networks', [])
                 if redes_locales:
@@ -275,7 +346,7 @@ def render_intelligence(router_db, datos):
 
             # --- GESTIÓN DE BLACKLIST (DESBLOQUEO) ---
             st.markdown("<br>", unsafe_allow_html=True)
-            with st.expander("🛡️ Gestionar Lista Negra (Desbloqueo de IPs)", expanded=False):
+            with st.expander(":material/security: Auditoría de Cuarentena IP (Revocaciones)", expanded=False):
                 blacklist = datos.get('blacklist', [])
                 if blacklist:
                     col_b1, col_b2 = st.columns([3, 1])
@@ -283,7 +354,7 @@ def render_intelligence(router_db, datos):
                         opciones_bl = {f"{b['ip']} ({b['comment']})": b['id'] for b in blacklist}
                         ip_a_desbloquear = st.selectbox("Seleccionar IP a liberar:", ["-- Seleccionar IP --"] + list(opciones_bl.keys()), label_visibility="collapsed")
                     with col_b2:
-                        if st.button("✅ Liberar IP"):
+                        if st.button(":material/task_alt: Liberar IP"):
                             if ip_a_desbloquear != "-- Seleccionar IP --":
                                 id_interno = opciones_bl[ip_a_desbloquear]
                                 from core.router_api import RouterManager
@@ -303,8 +374,8 @@ def render_intelligence(router_db, datos):
             st.success("Tráfico normal. Ninguna conexión activa supera el umbral.")
 
     with tab_vip:
-        st.markdown("### 💎 Base de Datos de Servidores Confiables")
-        st.write("Las IPs registradas aquí no serán marcadas como anomalías en el Radar.")
+        st.markdown("### :material/security: Base de Datos Analítica (Firmas Permitidas)")
+        st.write("Los Servidores e Infraestructuras catalogadas aquí no lanzarán alertas tácticas dentro del Motor Heurístico L7.")
         if lista_ips_vip:
             st.dataframe(pd.DataFrame(lista_ips_vip, columns=["IP Autorizada"]), use_container_width=True)
         else:

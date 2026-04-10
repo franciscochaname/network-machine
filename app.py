@@ -12,33 +12,6 @@ from core.health_score import calculate_health_score
 from core.geolocation import auto_geolocate_router
 from database.db_models import SessionLocal, User, Router, TrafficSnapshot
 
-@st.dialog("🚪 Port Knocking - Desbloqueo Seguro (Tok Tok)")
-def knock_dialog(ip_address):
-    st.markdown("### Secuencia de Desbloqueo")
-    st.markdown(f"**Destino:** `{ip_address}`")
-    st.write("Iniciando proceso de autenticación segura por secuencia de puertos...")
-    
-    from core.port_knock import port_knock
-    import time
-    
-    status_placeholder = st.empty()
-    status_placeholder.info("⏳ Esperando respuesta del router...")
-    
-    time.sleep(0.5)
-    
-    with st.spinner("🔑 Enviando toques de desbloqueo (Tok Tok)..."):
-        ok, msg = port_knock(ip_address)
-    
-    if ok:
-        status_placeholder.success(f"✅ ¡Completado! {msg}")
-        st.balloons()
-        st.success("El router ha respondido. Re-conectando en 3 segundos...")
-        time.sleep(3)
-        st.rerun()
-    else:
-        status_placeholder.error(f"❌ Falló el desbloqueo: {msg}")
-        if st.button("Cerrar"):
-            st.rerun()
 
 
 from views.overview import render_overview
@@ -51,7 +24,7 @@ from components.login import render_login
 # ==========================================
 st.set_page_config(
     page_title="Network Operations Center",
-    page_icon="🌐",
+    page_icon=":material/language:",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -59,16 +32,23 @@ st.set_page_config(
 load_global_css()
 
 # ==========================================
-# 2. COOKIES Y ESTADO DE SESIÓN
+# 2. COOKIES Y ESTADO DE SESIÓN (SECURIZADAS CON HMAC)
 # ==========================================
 cookies = CookieController()
 time.sleep(0.3)
 
+from core.crypto import verify_session_token, create_session_token
+
 if 'logged_in' not in st.session_state:
-    if cookies.get("is_logged_in"):
-        st.session_state['logged_in'] = True
-        st.session_state['username'] = cookies.get("username")
-        st.session_state['role'] = cookies.get("role")
+    session_token = cookies.get("session_token")
+    if session_token:
+        session_data = verify_session_token(str(session_token))
+        if session_data:
+            st.session_state['logged_in'] = True
+            st.session_state['username'] = session_data['u']
+            st.session_state['role'] = session_data['r']
+        else:
+            st.session_state['logged_in'] = False
     else:
         st.session_state['logged_in'] = False
 
@@ -92,49 +72,28 @@ if not st.session_state['logged_in']:
 with st.sidebar:
     safe_username = st.session_state.get('username') or "NOC"
     safe_role = st.session_state.get('role') or "Admin"
-    
+
+    # Contador de alertas activas
+    alert_history = st.session_state.get('alert_history', [])
+    n_critical = sum(1 for a in alert_history if a.get('severity') == 'critical')
+    n_total = len(alert_history)
+    badge_html = ""
+    if n_total > 0:
+        badge_html = f'<span class="soc-counter">{n_critical if n_critical > 0 else n_total}</span>'
+
     st.markdown(f"""
     <div class="sidebar-profile">
         <div class="sidebar-profile-inner">
             <div class="sidebar-avatar">{safe_username[0].upper()}</div>
             <div>
-                <div class="sidebar-username">{safe_username.upper()}</div>
+                <div class="sidebar-username">{safe_username.upper()}{badge_html}</div>
                 <div class="sidebar-role">{safe_role}</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    if 'menu_key' not in st.session_state:
-        st.session_state['menu_key'] = 0
-
-    menu_global = option_menu(
-        menu_title="Centro de Operaciones",
-        options=["Vista General", "Topología de Red",
-                 "Inteligencia de Red", "Centro Táctico", "Herramientas NOC", "Inventario de Nodos"],
-        icons=["grid-1x2-fill", "diagram-3-fill",
-               "eye-fill", "shield-lock-fill", "tools", "hdd-network-fill"],
-        menu_icon="broadcast", default_index=0,
-        key=f"sidebar_menu_{st.session_state['menu_key']}",
-        styles={
-            "container": {"padding": "5px !important", "background-color": "transparent"},
-            "icon": {"color": "#00F0FF", "font-size": "16px"},
-            "nav-link": {
-                "font-size": "13px", "text-align": "left", "margin": "2px 0",
-                "border-radius": "8px", "padding": "10px 15px",
-                "color": "#999", "font-weight": "500",
-                "--hover-color": "rgba(0, 240, 255, 0.05)"
-            },
-            "nav-link-selected": {
-                "background": "linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(177, 0, 255, 0.05))",
-                "border-left": "3px solid #00F0FF",
-                "color": "white", "font-weight": "600"
-            },
-        }
-    )
-    st.markdown("---")
-
-    # --- INFRAESTRUCTURA ---
+    # --- INFRAESTRUCTURA PRIMERO (HARD LOCK) ---
     db = SessionLocal()
     routers_db = db.query(Router).all()
     db.close()
@@ -143,33 +102,89 @@ with st.sidebar:
     force_refresh = False
 
     if not routers_db:
-        st.info("📌 Registra un equipo en el Inventario para comenzar.")
+        st.markdown("""
+        <div style="background-color: rgba(255, 170, 0, 0.1); border-left: 4px solid #FFAA00; padding: 12px; margin-bottom: 10px; border-radius: 4px;">
+            <p style="margin: 0; color: #FFAA00; font-size: 13px; font-weight: bold;"><i class="fa-solid fa-triangle-exclamation"></i> INFRAESTRUCTURA VACÍA</p>
+            <p style="margin: 5px 0 0 0; color: #ccc; font-size: 12px;">No existen nodos L3 registrados. Diríjase a <b>Inventario Infraestructura</b> para dar de alta su primer equipo.</p>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.markdown('<p class="sidebar-section-label">🌍 Infraestructura Activa</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sidebar-section-label"><i class="fa-solid fa-server"></i> NODO BASE OPERATIVO</p>', unsafe_allow_html=True)
         opciones = {f"{r.name} ({r.ip_address})": r for r in routers_db}
-        nombres_menu = ["-- Seleccionar Nodo --"] + list(opciones.keys())
+        nombres_menu = ["-- Seleccionar Nodo Central --"] + list(opciones.keys())
         seleccion = st.selectbox("Nodo Central", nombres_menu, label_visibility="collapsed")
 
-        if seleccion == "-- Seleccionar Nodo --":
+        if seleccion == "-- Seleccionar Nodo Central --":
             router_db = None
-            st.info("👈 Selecciona un equipo.")
+            st.markdown("""
+            <div style="background: rgba(0, 240, 255, 0.1); border-left: 3px solid #00F0FF; padding: 10px; margin-top: 5px; border-radius: 4px; margin-bottom: 15px;">
+                <span style="color: #00F0FF; font-size: 13px; font-weight: bold;"><i class="fa-solid fa-caret-up"></i> SELECCIONE UNA NUBE</span>
+                <p style="color: #aaa; font-size: 11px; margin: 3px 0 0 0;">Debe acoplarse visualmente a un nodo para extraer datos NetOps.</p>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             router_db = opciones[seleccion]
 
-            st.markdown('<p class="sidebar-refresh-label">⏱️ Tasa de Refresco</p>', unsafe_allow_html=True)
-            opciones_tiempo = {
-                "Automático (2 min)": 120, "Lento (50s)": 50,
-                "Normal (30s)": 30, "Rápido (20s)": 20,
-                "Extremo (10s)": 10, "Pausado (Manual)": 0
-            }
-            sel_tiempo = st.selectbox("Refresco", list(opciones_tiempo.keys()), index=0, label_visibility="collapsed")
-            tiempo_segundos = opciones_tiempo[sel_tiempo]
+    st.markdown("---")
 
-            if tiempo_segundos > 0:
-                count = st_autorefresh(interval=tiempo_segundos * 1000, key="data_refresh")
-                if count != st.session_state['refresh_count']:
-                    force_refresh = True
-                    st.session_state['refresh_count'] = count
+    # --- MENU RESTRINGIDO POR ESTADO L3 ---
+    if 'menu_key' not in st.session_state:
+        st.session_state['menu_key'] = 0
+
+    if not router_db:
+        opciones_menu = ["Panel General", "Inventario Infraestructura"]
+        iconos_menu = ["activity", "server"]
+        titulo_menu = "NOC / SOC"
+        color_tema = "#00F0FF"
+        icono_tema = "cpu-fill"
+    else:
+        opciones_menu = ["Visión Global AIOps", "Topología L2/L3",
+                 "Inteligencia NOC", "Consola Táctica (SOC)", "Herramientas NetOps", "Inventario Infraestructura"]
+        iconos_menu = ["activity", "diagram-2-fill",
+               "radar", "shield-shaded", "wrench-adjustable", "server"]
+        titulo_menu = "NOC / SOC"
+        color_tema = "#00F0FF"
+        icono_tema = "cpu-fill"
+
+    menu_global = option_menu(
+        menu_title=titulo_menu,
+        options=opciones_menu,
+        icons=iconos_menu,
+        menu_icon=icono_tema, default_index=0,
+        key=f"sidebar_menu_{st.session_state['menu_key']}",
+        styles={
+            "container": {"padding": "5px !important", "background-color": "transparent"},
+            "icon": {"color": color_tema, "font-size": "16px"},
+            "nav-link": {
+                "font-size": "13px", "text-align": "left", "margin": "2px 0",
+                "border-radius": "8px", "padding": "10px 15px",
+                "color": "#999" if router_db else "#666", "font-weight": "500",
+                "--hover-color": "rgba(0, 240, 255, 0.05)"
+            },
+            "nav-link-selected": {
+                "background": "linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(177, 0, 255, 0.05))" if router_db else "rgba(255,255,255,0.05)",
+                "border-left": f"3px solid {color_tema}",
+                "color": "white", "font-weight": "600"
+            },
+        }
+    )
+
+    if router_db:
+        st.markdown("---")
+        st.markdown('<p class="sidebar-refresh-label"><i class="fa-solid fa-clock-rotate-left"></i> Ciclo de Telemetría (Polling)</p>', unsafe_allow_html=True)
+        opciones_tiempo = {
+            "Automático (2 min)": 120, "Lento (50s)": 50,
+            "Normal (30s)": 30, "Rápido (20s)": 20,
+            "Extremo (10s)": 10, "Pausado (Manual)": 0
+        }
+        sel_tiempo = st.selectbox("Refresco", list(opciones_tiempo.keys()), index=0, label_visibility="collapsed")
+        tiempo_segundos = opciones_tiempo[sel_tiempo]
+
+        if tiempo_segundos > 0:
+            count = st_autorefresh(interval=tiempo_segundos * 1000, key="data_refresh")
+            if count != st.session_state['refresh_count']:
+                force_refresh = True
+                st.session_state['refresh_count'] = count
 
             if st.session_state['nodo_actual'] != router_db.ip_address:
                 st.session_state['telemetria'] = None
@@ -191,7 +206,8 @@ with st.sidebar:
             if necesita_sincronizar:
                 with st.spinner(f"🔌 Conectando con {router_db.name} | Procesando carga de Telemetría (100%)... no interrumpas."):
                     router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
-                    if router.connect()[0]:
+                    ok, conn_msg = router.connect()
+                    if ok:
                         trafico = router.get_smart_traffic()
                         total_rx = sum(t['rx'] for t in trafico)
                         total_tx = sum(t['tx'] for t in trafico)
@@ -215,8 +231,20 @@ with st.sidebar:
                             "local_networks": router.get_local_networks(),
                             "wifi_interfaces": router.get_wifi_interfaces(),
                             "wifi_neighbors": router.get_wifi_neighbors(),
+                            "ethernet_neighbors": router.get_ethernet_neighbors(),
+                            "bridge_hosts": router.get_bridge_hosts(),
                             "interface_health": router.get_interface_health(),
                             "sfp_diagnostics": router.get_sfp_diagnostics(),
+                            "wan_status": router.get_wan_status(),
+                            # --- Funciones previamente muertas, ahora ACTIVAS ---
+                            "routing_health": router.get_routing_health(),
+                            "dns_config": router.get_dns_config(),
+                            "storage_info": router.get_storage_info(),
+                            "protocol_distribution": router.get_protocol_distribution() if force_l7 else {},
+                            "bandwidth_by_subnet": router.get_bandwidth_by_subnet() if force_l7 else [],
+                            "active_queues": router.get_active_queues(),
+                            # --- Metadatos de sincronización ---
+                            "sync_timestamp": datetime.now().strftime("%H:%M:%S"),
                         }
                         # Resetar flag después de cargar
                         if force_l7: st.session_state['force_l7'] = False
@@ -256,8 +284,8 @@ with st.sidebar:
                         except Exception:
                             pass
 
-                        # Auto-geolocalización (solo si aún no tiene coordenadas)
-                        if not router_db.latitude or not router_db.longitude:
+                        # Auto-geolocalización (solo si NUNCA fue configurado — None, no 0.0)
+                        if router_db.latitude is None or router_db.longitude is None:
                             try:
                                 geo = auto_geolocate_router(router.api, fallback_ip=router_db.ip_address)
                                 if geo:
@@ -278,73 +306,126 @@ with st.sidebar:
                     else:
                         st.session_state['telemetria'] = None
                         if not force_refresh:
-                            st.error("🚨 Nodo Inalcanzable — La API no respondió.")
-                            
-                            st.warning("El router puede estar protegido por la secuencia Tok Tok (Port Knocking).")
-                            
-                            if st.button("🚪 Iniciar Desbloqueo Tok Tok", type="primary", use_container_width=True):
-                                knock_dialog(router_db.ip_address)
-                            
-                            with st.expander("🛠️ Script de Configuración / Manual"):
-                                from core.port_knock import get_knock_status_text, generate_mikrotik_script, generate_powershell_script
-                                st.code(get_knock_status_text(router_db.ip_address), language="text")
-                                st.markdown("**Reglas MikroTik:**")
-                                st.code(generate_mikrotik_script(), language="bash")
-                                st.markdown("**Script PowerShell Windows:**")
-                                st.code(generate_powershell_script(router_db.ip_address), language="powershell")
+                            from core.router_base import check_port_open
+                            import socket
+
+                            # Detectar la IP actual de esta máquina
+                            try:
+                                mi_ip = socket.gethostbyname(socket.gethostname())
+                            except Exception:
+                                mi_ip = "TU_IP"
+
+                            puerto_abierto = check_port_open(router_db.ip_address, 8728, timeout=2.0)
+
+                            if conn_msg == "CREDENTIALS" or (puerto_abierto and conn_msg != "BLOCKED"):
+                                # Puerto abierto pero credenciales incorrectas
+                                st.error(":material/key: Credenciales incorrectas o servicio API deshabilitado.")
+                                st.markdown(f"""
+                                <div style="background:rgba(255,170,0,0.08);border-left:4px solid #FFAA00;padding:16px;border-radius:6px;margin-top:8px;">
+                                    <h4 style="margin:0 0 10px 0;color:#FFAA00;">:material/key: Solución — Verificar en WinBox</h4>
+                                    <p style="color:#ccc;font-size:13px;margin-bottom:8px;">Conecta a <b>{router_db.ip_address}</b> por WinBox y ejecuta en Terminal (New Terminal):</p>
+                                    <pre style="background:#111;padding:10px;border-radius:4px;font-size:12px;color:#00FF88;">/ip service print
+# Verificar que 'api' esté enabled y address esté vacío.
+# Si address tiene una IP específica, límpiala:
+/ip service set api address=""</pre>
+                                    <p style="color:#888;font-size:12px;margin-top:8px;">También verifica que el usuario tenga permisos <b>full</b> en /system/user.</p>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                            else:
+                                # Puerto bloqueado por firewall
+                                st.error(f":material/lock: API bloqueada en {router_db.ip_address}:8728 — El firewall rechaza la conexión.")
+                                st.markdown(f"""
+                                <div style="background:rgba(255,60,60,0.08);border-left:4px solid #ff3c3c;padding:16px;border-radius:6px;margin-top:8px;">
+                                    <h4 style="margin:0 0 10px 0;color:#ff3c3c;">:material/security: Solución — Dar acceso en WinBox</h4>
+                                    <p style="color:#ccc;font-size:13px;margin-bottom:8px;">Conecta a <b>{router_db.ip_address}</b> por WinBox y ejecuta en Terminal (New Terminal):</p>
+                                    <pre style="background:#111;padding:10px;border-radius:4px;font-size:12px;color:#00FF88;"># Agrega tu IP a la lista de acceso permitido:
+/ip firewall address-list add \\
+    list=API_Segura \\
+    address={mi_ip} \\
+    comment="NOC Dashboard - Acceso Temporal"
+
+# Verifica que estas 2 reglas existan en /ip/firewall/filter:
+# ACCEPT: chain=input dst-port=8728 src-address-list=API_Segura
+# DROP:   chain=input dst-port=8728 (al final)</pre>
+                                    <p style="color:#888;font-size:12px;margin-top:8px;">Tu IP detectada: <b>{mi_ip}</b> · Router: <b>{router_db.ip_address}</b></p>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                                with st.expander(":material/network_check: Diagnóstico de puertos"):
+                                    from core.router_base import check_port_open as _chk
+                                    for p, label in [(8728, "API (8728)"), (8291, "WinBox (8291)"), (22, "SSH (22)"), (80, "HTTP (80)")]:
+                                        ok_p = _chk(router_db.ip_address, p, timeout=1.5)
+                                        st.markdown(f"{'🟢' if ok_p else '🔴'} **{label}** — {'ABIERTO' if ok_p else 'BLOQUEADO/CERRADO'}")
 
     # --- CERRAR SESIÓN ---
     st.markdown("---")
-    if st.button("🔒 Cerrar Sesión", use_container_width=True):
+    if st.button(":material/lock_outline: Cerrar Sesión", use_container_width=True):
         st.session_state['logged_in'] = False
-        for cookie in ["is_logged_in", "username", "role"]:
-            cookies.remove(cookie)
+        # SEC-03: Limpiar token firmado
+        try:
+            cookies.remove("session_token")
+        except Exception:
+            pass
         keys_to_clear = [k for k in st.session_state.keys() if k != 'logged_in']
         for k in keys_to_clear:
-            del st.session_state[k]
+            try:
+                del st.session_state[k]
+            except Exception:
+                pass
         time.sleep(0.3)
         st.rerun()
 
 # ==========================================
-# 5. ALERTAS GLOBALES (AIOps)
+# 5. ALERTAS GLOBALES (AIOps) — Registro persistente
 # ==========================================
 if st.session_state.get('telemetria'):
     latencia_servers = st.session_state['telemetria'].get('latencia', [])
+    from views.overview import _alert_register
     for srv in latencia_servers:
         if str(srv.get('status', '')).lower() == 'down':
-            st.toast(f"CRÍTICO: {srv.get('comment')} CAÍDO", icon="🚨")
-            st.markdown(f"""
-            <div class="aiops-alert">
-                <span class="aiops-alert-icon">🚨</span>
-                <div>
-                    <div class="aiops-alert-title">ALERTA AIOps CRÍTICA</div>
-                    <div class="aiops-alert-body">
-                        El equipo <strong>{srv.get('host')}</strong> ({srv.get('comment')}) ha dejado de responder.
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            _alert_register('critical', f"Servidor CAÍDO: {srv.get('comment', srv.get('host', '?'))}")
+            st.toast(f"🚨 {srv.get('comment')} — CAÍDO", icon=":material/emergency:")
 
 # ==========================================
 # 6. ENRUTADOR DE VISTAS (SPA)
 # ==========================================
 
 # Vistas globales (no requieren router conectado)
-if menu_global == "Inventario de Nodos":
+if menu_global == "Inventario Infraestructura":
     render_inventory()
 
-elif menu_global == "Herramientas NOC":
+elif menu_global == "Herramientas NetOps":
     from views.tools import render_tools
     render_tools()
 
 # Vistas operativas (requieren router + telemetría)
 else:
-    if not router_db:
+    if not routers_db:
         st.markdown("""
         <div class="empty-state">
-            <div class="empty-state-icon">🌐</div>
-            <h2 class="empty-state-title">Sin Nodo Seleccionado</h2>
-            <p class="empty-state-desc">Selecciona un equipo en el panel lateral para activar el centro de operaciones.</p>
+            <div class="empty-state-icon" style="color: #FFAA00; font-size: 4em;"><i class="fa-solid fa-server"></i></div>
+            <h2 class="empty-state-title">Despliegue Cero (Zero-Day Setup)</h2>
+            <p class="empty-state-desc" style="max-width: 600px; margin: 0 auto;">No existen equipos enrutadores / firewalls registrados en la base de datos forense.</p>
+            <br>
+            <div style="text-align: left; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; border: 1px solid #333; max-width: 500px; margin: 0 auto;">
+                <h4 style="color: #00F0FF; margin-top: 0;"><i class="fa-solid fa-clipboard-check"></i> Requisitos Críticos Previos:</h4>
+                <ul style="color: #ccc; font-size: 14px;">
+                    <li>Estar conectado físicamente (LAN) o lógicamente (Túnel VPN / OSPF) con la IP de Gestión del equipo.</li>
+                    <li>Tener habilitado el <b>Servicio API de MikroTik</b> (puerto 8728 por defecto o custom).</li>
+                    <li>Disponer de credenciales nivel 'full' o escalado de privilegios equivalente.</li>
+                </ul>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    elif not router_db:
+        st.markdown("""
+        <div class="empty-state" style="margin-top: 10%;">
+            <div class="empty-state-icon" style="color: #444; font-size: 6em; margin-bottom: 20px;"><i class="fa-solid fa-plug-circle-xmark"></i></div>
+            <h2 class="empty-state-title" style="color: #666; font-weight: 400;">Telemetría en Espera</h2>
+            <div style="display: inline-block; background: rgba(0, 240, 255, 0.1); border-left: 4px solid #00F0FF; padding: 12px 25px; border-radius: 4px; margin-top: 15px;">
+                <span style="color: #00F0FF; font-size: 16px; font-weight: bold;"><i class="fa-solid fa-angles-left"></i> SELECCIONE UN NODO OPERATIVO EN EL PANEL LATERAL</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     elif not st.session_state.get('telemetria'):
@@ -357,14 +438,14 @@ else:
         """, unsafe_allow_html=True)
     else:
         telemetria = st.session_state['telemetria']
-        if menu_global == "Vista General":
+        if menu_global == "Visión Global AIOps":
             render_overview(router_db, telemetria)
-        elif menu_global == "Topología de Red":
+        elif menu_global == "Topología L2/L3":
             from views.topology import render_topology
             render_topology(router_db, telemetria)
-        elif menu_global == "Inteligencia de Red":
+        elif menu_global == "Inteligencia NOC":
             render_intelligence(router_db, telemetria)
-        elif menu_global == "Centro Táctico":
+        elif menu_global == "Consola Táctica (SOC)":
             from views.tactical_console import render_tactical_console
             render_tactical_console(router_db, st.session_state['telemetria'])
 

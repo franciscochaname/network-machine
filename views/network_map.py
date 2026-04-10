@@ -39,7 +39,7 @@ def render_network_map(router_id=None):
             
             col_btn, col_info = st.columns([1, 3])
             with col_btn:
-                detectar = st.button("🌍 Auto-Detectar Todos", type="primary", use_container_width=True)
+                detectar = st.button(":material/public: Auto-Detectar Todos", type="primary", use_container_width=True)
             
             if detectar:
                 progreso = st.progress(0, text="Iniciando geolocalización...")
@@ -63,11 +63,11 @@ def render_network_map(router_id=None):
                             r.location = f"{geo.get('city', '')}, {geo.get('country', '')}"
                             db.commit()
                             exitos += 1
-                            st.success(f"✅ **{r.name}** → {geo.get('city')}, {geo.get('country')} ({geo['lat']:.4f}, {geo['lon']:.4f})")
+                            st.success(f":material/task_alt: **{r.name}** → {geo.get('city')}, {geo.get('country')} ({geo['lat']:.4f}, {geo['lon']:.4f})")
                         else:
-                            st.warning(f"⚠️ **{r.name}** — No se pudo determinar IP pública. Ingresa coordenadas manualmente en el Inventario.")
+                            st.warning(f":material/warning_amber: **{r.name}** — No se pudo determinar IP pública. Ingresa coordenadas manualmente en el Inventario.")
                     else:
-                        st.error(f"❌ **{r.name}** — No se pudo conectar.")
+                        st.error(f":material/cancel: **{r.name}** — No se pudo conectar.")
 
                 progreso.progress(1.0, text=f"Completado: {exitos}/{total} equipos geolocalizados.")
                 if exitos > 0:
@@ -135,8 +135,13 @@ def render_network_map(router_id=None):
         </div>
         """
 
-        # Determinar icono segun tipo (AP vs Router)
-        icon_type = "wifi" if r.ip_address in str(st.session_state.get('telemetria', {}).get('info', {})) and st.session_state['telemetria']['info'].get('has_ap') else "server"
+        # Determinar icono segun tipo (AP vs Router) validando NoneType
+        telemetria = st.session_state.get('telemetria')
+        t_data = telemetria if isinstance(telemetria, dict) else {}
+        t_info = t_data.get('info', {}) if isinstance(t_data, dict) else {}
+        has_ap = t_info.get('has_ap', False) if isinstance(t_info, dict) else False
+        
+        icon_type = "wifi" if r.ip_address in str(t_info) and has_ap else "server"
         
         folium.Marker(
             location=[r.latitude, r.longitude],
@@ -205,10 +210,10 @@ def render_network_map(router_id=None):
 
             for r in routers:
                 tiene_ubicacion = r.latitude and r.longitude
-                icono = "🟢" if tiene_ubicacion else "⚪"
+                icono = '<i class="fa-solid fa-location-crosshairs" style="color: #00FFAA; font-size: 18px;"></i>' if tiene_ubicacion else '<i class="fa-solid fa-location-dot" style="color: #FF4B4B; font-size: 18px;"></i>'
                 st.markdown(f"""
                 <div class="map-router-card">
-                    <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
                         <span>{icono}</span>
                         <div>
                             <div class="map-router-name">{r.name}</div>

@@ -52,9 +52,10 @@ def render_login(cookies):
                         user = db.query(User).filter(User.username == username).first()
                         db.close()
                         if user and user.is_active and verify_password(password, user.password_hash):
-                            cookies.set("is_logged_in", True)
-                            cookies.set("username", user.username)
-                            cookies.set("role", user.role)
+                            # SEC-03: Crear token firmado con HMAC en vez de cookies planas
+                            from core.crypto import create_session_token
+                            token = create_session_token(user.username, user.role)
+                            cookies.set("session_token", token)
                             st.session_state['logged_in'] = True
                             st.session_state['username'] = user.username
                             st.session_state['role'] = user.role

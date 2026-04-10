@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import time
+import plotly.graph_objects as go
 
 from core.network_scanner import detect_arp_anomalies, detect_rogue_dhcp, is_scapy_ready
 
@@ -127,6 +128,31 @@ def _get_soc_logs(router_id, limit=100):
         return []
 
 
+def _get_soc_logs_raw(router_id, limit=300):
+    """Lee los últimos logs SOC como dicts completos (para timeline visual)."""
+    try:
+        from database.db_models import SessionLocal, SOCActionLog
+        db = SessionLocal()
+        logs = db.query(SOCActionLog).filter(
+            SOCActionLog.router_id == router_id
+        ).order_by(SOCActionLog.created_at.desc()).limit(limit).all()
+        result = []
+        for l in logs:
+            result.append({
+                'action': l.action or '',
+                'status': l.status or 'INFO',
+                'user': l.user or 'admin',
+                'details': getattr(l, 'details', '') or '',
+                'created_at': l.created_at,
+            })
+        db.close()
+        return result
+    except Exception as e:
+        import logging
+        logging.error(f"Error leyendo SOC logs raw: {e}")
+        return []
+
+
 # ================================================================
 # VISTA PRINCIPAL
 # ================================================================
@@ -142,18 +168,19 @@ def render_tactical_console(router_db, datos):
         st.session_state['soc_logs'].insert(0, f"[{ts}] [{status}] {action}")
         _save_soc_log(router_db.id, action, status, st.session_state.get('username', 'admin'))
 
-    st.title(f"🛡️ Centro Táctico — {router_db.name}")
+    st.title(f":material/security: Centro Táctico — {router_db.name}")
     st.markdown("Gestión unificada de Red Local, VPN, Firewall y Recuperación ante Desastres.")
 
     # ==========================================
     # TABS DE NAVEGACIÓN INTERNA
     # ==========================================
-    tab_lan, tab_vpn, tab_firewall, tab_devices, tab_backup = st.tabs([
-        "🔌 Dispositivos LAN",
-        "🌍 Gestión VPN",
-        "🛡️ Firewall - Seguridad de la Red",
-        "🚫 Control de Acceso (Bloqueos)",
-        "🚑 Backups & Recovery"
+    tab_lan, tab_vpn, tab_firewall, tab_devices, tab_backup, tab_logs = st.tabs([
+        "🔌 Segmentos LAN (DHCP/ARP)",
+        ":material/public: Túneles VPN Activos",
+        ":material/security: Core Firewall (NetFilter)",
+        ":material/block: Aislamiento Activo (Cuarentena L2/L3)",
+        ":material/medical_services: Disaster Recovery (Backups)",
+        "📜 Historial / Logs SOC"
     ])
 
     # ------------------------------------------
@@ -169,12 +196,12 @@ def render_tactical_console(router_db, datos):
         
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("📡 Total Dispositivos", total_leases)
-        c2.metric("✅ Conectados (Bound)", activos)
-        c3.metric("📶 Clientes WiFi", wifi_clients)
+        c2.metric(":material/task_alt: Conectados (Bound)", activos)
+        c3.metric(":material/wifi_tethering: Clientes WiFi", wifi_clients)
         c4.metric("🔌 Servidores DHCP", len(set(l.get('server', '') for l in leases)) if leases else 0)
         
         st.markdown("---")
-        st.markdown("### 💻 Auditoría de Equipos Locales")
+        st.markdown("### :material/computer: Auditoría de Terminales L2 (DHCP/ARP)")
         
         if leases:
             columnas_disponibles = ['address', 'mac-address', 'host-name', 'server', 'status', 'last-seen']
@@ -184,8 +211,8 @@ def render_tactical_console(router_db, datos):
             if columnas_presentes:
                 df_leases = df_leases[[c for c in columnas_presentes if c in df_leases.columns]].fillna('N/A')
                 renombrar = {
-                    'address': '🖥️ IP', 'mac-address': '🔗 MAC', 'host-name': '📛 Hostname',
-                    'server': '📡 Red', 'status': '📊 Estado', 'last-seen': '🕐 Última Vez'
+                    'address': ':material/desktop_windows: IP', 'mac-address': ':material/link: MAC', 'host-name': ':material/badge: Hostname',
+                    'server': '📡 Red', 'status': ':material/bar_chart: Estado', 'last-seen': ':material/access_time: Última Vez'
                 }
                 df_leases.rename(columns={k: v for k, v in renombrar.items() if k in df_leases.columns}, inplace=True)
                 st.dataframe(df_leases, hide_index=True, use_container_width=True)
@@ -195,16 +222,16 @@ def render_tactical_console(router_db, datos):
         # WiFi Registration Table
         if datos.get('wifi_neighbors'):
             st.markdown("---")
-            st.markdown("### 📶 Clientes WiFi Conectados (Registration Table)")
+            st.markdown("### :material/wifi_tethering: Clientes WiFi Conectados (Registration Table)")
             df_wifi = pd.DataFrame(datos['wifi_neighbors'])
             cols_wifi = ['mac', 'interface', 'signal', 'tx_rate', 'rx_rate', 'uptime', 'hostname']
             cols_presentes = [c for c in cols_wifi if c in df_wifi.columns]
             if cols_presentes:
                 df_wifi_show = df_wifi[cols_presentes].copy()
                 rename_wifi = {
-                    'mac': '🔗 MAC', 'interface': '📡 Interface', 'signal': '📶 Señal',
-                    'tx_rate': '⬆️ TX Rate', 'rx_rate': '⬇️ RX Rate',
-                    'uptime': '⏱️ Conectado', 'hostname': '🖥️ IP/Host'
+                    'mac': ':material/link: MAC', 'interface': '📡 Interface', 'signal': ':material/wifi_tethering: Señal',
+                    'tx_rate': ':material/arrow_upward:️ TX Rate', 'rx_rate': ':material/arrow_downward:️ RX Rate',
+                    'uptime': ':material/timer: Conectado', 'hostname': ':material/desktop_windows: IP/Host'
                 }
                 df_wifi_show.rename(columns={k: v for k, v in rename_wifi.items() if k in df_wifi_show.columns}, inplace=True)
                 st.dataframe(df_wifi_show, hide_index=True, use_container_width=True)
@@ -216,12 +243,12 @@ def render_tactical_console(router_db, datos):
         vpns_activas = datos.get('vpns', [])
 
         c1, c2 = st.columns(2)
-        c1.metric("🌍 Conexiones Activas", len(vpns_activas))
+        c1.metric(":material/public: Conexiones Activas", len(vpns_activas))
         protocolos = list(set(v.get('service', 'N/A') for v in vpns_activas)) if vpns_activas else []
-        c2.metric("🔐 Protocolos en Uso", ", ".join(protocolos) if protocolos else "Ninguno")
+        c2.metric(":material/lock: Protocolos en Uso", ", ".join(protocolos) if protocolos else "Ninguno")
 
         st.markdown("---")
-        st.markdown("### 🌍 Usuarios Remotos y Sucursales")
+        st.markdown("### :material/public: Terminales Remotos y Enlaces Site-to-Site (VPN)")
 
         if vpns_activas:
             st.success(f"Hay **{len(vpns_activas)}** conexiones VPN activas en este momento.")
@@ -232,14 +259,14 @@ def render_tactical_console(router_db, datos):
             df_vpns = df_vpns[cols_presentes]
             
             renombrar_vpn = {
-                'name': '👤 Usuario/Sucursal', 'service': '🔐 Protocolo',
-                'caller-id': '🌐 IP Pública', 'address': '🏠 IP Local', 'uptime': '⏱️ Conectado'
+                'name': ':material/person: Usuario/Sucursal', 'service': ':material/lock: Protocolo',
+                'caller-id': ':material/language: IP Pública', 'address': '🏠 IP Local', 'uptime': ':material/timer: Conectado'
             }
             df_vpns.rename(columns={k: v for k, v in renombrar_vpn.items() if k in df_vpns.columns}, inplace=True)
             st.dataframe(df_vpns, hide_index=True, use_container_width=True)
 
             st.markdown("---")
-            with st.expander("🚨 Forzar Desconexión de Usuario", expanded=False):
+            with st.expander(":material/emergency: Forzar Desconexión (Kill Tunnel)", expanded=False):
                 col1, col2 = st.columns([3, 1])
                 with col1:
                     nombres_vpn = [v['name'] for v in vpns_activas if 'name' in v]
@@ -249,7 +276,7 @@ def render_tactical_console(router_db, datos):
                         label_visibility="collapsed"
                     )
                 with col2:
-                    if st.button("⚡ Cortar Conexión", type="primary", use_container_width=True):
+                    if st.button(":material/bolt: Cortar Conexión", type="primary", use_container_width=True):
                         if user_kick != "-- Seleccionar --":
                             from core.router_api import RouterManager
                             router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
@@ -264,7 +291,7 @@ def render_tactical_console(router_db, datos):
                                 else:
                                     st.error(msj)
                         else:
-                            st.warning("⚠️ Selecciona un usuario u oficina de la lista para desconectar.")
+                            st.warning(":material/warning_amber: Selecciona un usuario u oficina de la lista para desconectar.")
         else:
             st.info("No hay usuarios VPN conectados actualmente.")
 
@@ -276,29 +303,28 @@ def render_tactical_console(router_db, datos):
         conn_activas = datos.get('sec', {}).get('conexiones_activas', 0)
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("🔥 Conexiones Firewall", f"{conn_activas:,}")
-        c2.metric("⛔ Reglas Blacklist", len(blacklist))
-        c3.metric("📊 Saturación", f"{(conn_activas / 300000) * 100:.1f}%")
+        c1.metric(":material/whatshot: Conexiones Firewall", f"{conn_activas:,}")
+        c2.metric(":material/front_hand: Reglas Blacklist", len(blacklist))
+        c3.metric(":material/bar_chart: Saturación", f"{(conn_activas / 300000) * 100:.1f}%")
         
         st.markdown("---")
         
         # --- MONITOR DE CONEXIONES ACTIVAS (WINBOX STYLE) ---
-        st.markdown("### 🕸️ Monitor de Conexiones Activas (Live Tracking)")
+        st.markdown("### :material/hub: Monitor de Flujos Activos (Live Packet Tracking)")
         st.caption("Visualiza en tiempo real los flujos de tráfico, estados TCP/UDP y timeouts. Cruza esta tabla con las reglas para verificar el bloqueo.")
 
         # Filtro rápido por IP si hay un dispositivo seleccionado en el tab de dispositivos o manual
-        filtro_ip = st.text_input("🔍 Filtrar conexiones por IP Origen/Destino:", placeholder="Ej: 192.168.50.22", key="conn_filter_ip")
+        filtro_ip = st.text_input(":material/search: Filtrar conexiones por IP Origen/Destino:", placeholder="Ej: 192.168.50.22", key="conn_filter_ip")
 
         if 'flujos_sankey' in datos:
             raw_conns = datos.get('flujos_sankey', [])
             if raw_conns:
                 # Filtrar si hay búsqueda
-                if filtro_ip:
-                    raw_conns = [c for c in raw_conns if filtro_ip in c.get('src-address', '') or filtro_ip in c.get('dst-address', '')]
+                filtered_conns = [c for c in raw_conns if filtro_ip in c.get('src-address', '') or filtro_ip in c.get('dst-address', '')] if filtro_ip else raw_conns
 
                 # Preparar datos para tabla amigable
                 conns_display = []
-                for c in raw_conns:
+                for c in filtered_conns:
                     orig_bytes = int(c.get('orig-bytes', 0))
                     repl_bytes = int(c.get('repl-bytes', 0))
                     rate_orig = c.get('orig-rate', '0bps')
@@ -308,9 +334,9 @@ def render_tactical_console(router_db, datos):
                     tcp_state = c.get('tcp-state', '-')
                     proto = c.get('protocol', 'unknown')
                     
-                    status_emoji = "🟢" # Established
+                    status_emoji = ":material/check_circle:" # Established
                     if tcp_state == 'time-wait': status_emoji = "⏳"
-                    elif tcp_state == 'close': status_emoji = "🔴"
+                    elif tcp_state == 'close': status_emoji = ":material/error:"
                     elif proto == 'udp': status_emoji = "🔵"
                     
                     conns_display.append({
@@ -322,30 +348,27 @@ def render_tactical_console(router_db, datos):
                         "Tráfico": f"{round((orig_bytes + repl_bytes)/1024, 1)} KB"
                     })
                 
-        if 'flujos_sankey' in datos:
-            raw_conns = datos.get('flujos_sankey', [])
-            if raw_conns:
                 # ... tabla de conexiones existente ...
                 df_conns = pd.DataFrame(conns_display)
                 st.dataframe(df_conns, hide_index=True, use_container_width=True, height=350)
                 
                 # --- NUEVA ACCIÓN RÁPIDA DESDE EL MONITOR ---
-                with st.expander("⚡ Acción Rápida: Cortar Internet a una IP en vivo"):
+                with st.expander(":material/bolt: Acción Rápida: Cortar Internet a una IP en vivo"):
                     # Extraer IPs únicas de origen de la tabla live
-                    all_srcs = sorted(list(set([c.get('src-address', '').split(':')[0] for c in raw_conns if 'src-address' in c])))
+                    all_srcs = sorted(list(set([c.get('src-address', '').split(':')[0] for c in filtered_conns if 'src-address' in c])))
                     col_sq, col_bq = st.columns([3, 1])
                     with col_sq:
                         ip_to_kill = st.selectbox("Selecciona IP de origen detectada:", ["-- Seleccionar --"] + all_srcs, key="quick_kill_ip")
                     with col_bq:
-                        if st.button("⛔ KILL SWITCH", type="primary", use_container_width=True):
+                        if st.button(":material/front_hand: KILL SWITCH", type="primary", use_container_width=True):
                             if ip_to_kill != "-- Seleccionar --":
                                 from core.router_api import RouterManager
                                 router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
                                 if router.connect()[0]:
                                     with st.spinner(f"Neutralizando {ip_to_kill}..."):
-                                        exito, msj = router.block_device(ip_to_kill, "BLOQUEO TOTAL", "Corte rápido desde monitor")
+                                        exito, msj, _ = router.block_device(ip_address=ip_to_kill, reason="Corte rápido desde monitor")
                                         if exito: 
-                                            st.success(f"✅ Host {ip_to_kill} bloqueado exitosamente.")
+                                            st.success(f":material/task_alt: Host {ip_to_kill} bloqueado exitosamente.")
                                             time.sleep(1)
                                             st.rerun()
                                         else: 
@@ -356,143 +379,155 @@ def render_tactical_console(router_db, datos):
 
         st.markdown("---")
         # Bloqueo Avanzado (motor táctico existente)
-        st.markdown("### ⛔ Motor de Contención y Defensa AIOps")
-        st.caption("Inyecta bloqueos multicapa para neutralizar amenazas inmediatamente.")
-
-        vendor = getattr(router_db, 'vendor', 'MikroTik').upper()
-        
-        c_tipo, c_alcance = st.columns(2)
-        with c_tipo:
-            block_type = st.selectbox("🎯 ¿Qué deseas bloquear? (Categoría Destino)", 
-                                     ["Corte Total de Internet (Kill Switch)", 
-                                      "Página Web / Red Social (Address List)", 
-                                      "IP / Subred (Drop Específico)", 
-                                      "Puerto (Ej: 22, 3389, 445)"])
-        with c_alcance:
-            scope_type = st.selectbox("👤 ¿A quién afecta el bloqueo? (Rango de Origen)", ["Toda la red (Bloqueo Global)", "A una IP Específica (Solo un equipo)", "A un Grupo (Una Subred entera)"])
-
-        sub_red_social = None
-        if "Corte Total" in block_type:
-            target_bloqueo = "0.0.0.0/0"
-            st.info("⚠️ El Kill Switch bloqueará TODO el tráfico saliente del dispositivo u origen seleccionado.")
-        elif "Página Web" in block_type:
-            sub_cola, sub_input = st.columns([1.5, 2])
-            with sub_cola:
-                sub_red_social = st.selectbox("Selecciona Pack Social:", ["Manual (Escribir dominio)", "WhatsApp", "YouTube", "Facebook", "TikTok", "Instagram", "Netflix"])
-            with sub_input:
-                if sub_red_social == "Manual (Escribir dominio)":
-                    target_bloqueo = st.text_input("Ingresa el dominio principal:", placeholder="Ej: zoom.us")
-                else:
-                    target_bloqueo = sub_red_social.lower() + ".com"
-                    st.text_input("Objetivo Detectado:", value=f"Pack {sub_red_social} (Dominio Base: {target_bloqueo})", disabled=True)
-        else:
-            placeholder = "IP Destino (Ej: 192.168.1.10)" if "IP / Subred" in block_type else "Puerto (Ej: 80, 443)"
-            target_bloqueo = st.text_input("Ingresa el Destino:", placeholder=placeholder)
-
-        col_origen, col_comentario, col_btn = st.columns([1.5, 1, 1])
-        with col_origen:
-            if "Toda la red" in scope_type:
-                target_origen = "Todos"
-                st.text_input("Paso 2: Ingresa el Origen", value="Afecta a todo el mundo", disabled=True)
-            elif "IP Específica" in scope_type:
-                ips_activas = set()
-                for arp in datos.get('arp_table', []):
-                    if isinstance(arp, dict) and arp.get('address'): 
-                        ips_activas.add(arp['address'] + " (ARP)")
-                for vpn in datos.get('vpns', []):
-                    if isinstance(vpn, dict) and vpn.get('address'): 
-                        ips_activas.add(vpn['address'] + " (VPN)")
-                for dhcp in datos.get('dhcp', []):
-                    if isinstance(dhcp, dict) and dhcp.get('status') == 'bound' and dhcp.get('address'): 
-                        ips_activas.add(dhcp['address'] + f" (DHCP {dhcp.get('host-name', '')})")
-                
-                opciones = ["-- Seleccionar (Verificadas) --"] + sorted(list(ips_activas)) + ["Escribir IP Manualmente..."]
-                seleccion = st.selectbox("Paso 2: Selecciona la IP Origen", opciones)
-                
-                if seleccion == "Escribir IP Manualmente...":
-                    target_origen = st.text_input("Ingresa la IP Manual:", placeholder="Ej: 192.168.10.55")
-                else:
-                    target_origen = "" if seleccion == "-- Seleccionar (Verificadas) --" else seleccion.split(" (")[0]
-            else:
-                redes = set()
-                for net in datos.get('local_networks', []):
-                    if isinstance(net, dict) and net.get('network'): 
-                        redes.add(net['network'] + " (Rango Completo LAN)")
-                
-                opciones = ["-- Seleccionar Rango CIDR --"] + sorted(list(redes)) + ["Especificar CIDR Manual..."]
-                seleccion = st.selectbox("Paso 2: Selecciona la Subred (Afecta a todo el bloque DHCP)", opciones)
-                
-                if seleccion == "Especificar CIDR Manual...":
-                    target_origen = st.text_input("Ingresa Segmento CIDR:", placeholder="Ej: 172.16.0.0/20 (Afecta a todos)")
-                else:
-                    target_origen = "" if seleccion == "-- Seleccionar Rango CIDR --" else seleccion.split(" (")[0]
-        with col_comentario:
-            comentario = st.text_input("Razón (Opcional)", placeholder="Ej: Ataque SOC")
-        with col_btn:
+        with st.container(border=True):
+            st.markdown("### :material/front_hand: Motor de Contención y Defensa AIOps")
+            st.caption("Inyecta bloqueos multicapa para neutralizar amenazas inmediatamente.")
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_ping, btn_block = st.columns(2)
-            
-            with btn_ping:
-                if st.button("📡 Ping", help="Verificar si la víctima está en línea", use_container_width=True):
-                    if target_origen and target_origen != "Todos":
-                        from core.network_scanner import scan_network_scapy
-                        ip_raw = target_origen.split(' (')[0].strip()
-                        if scan_network_scapy(ip_raw):
-                            st.toast(f"✅ Host {ip_raw} responde.")
-                        else:
-                            st.toast(f"❌ Host {ip_raw} NO responde.")
-                    else:
-                        st.warning("Selecciona una IP/Origen.")
 
-            with btn_block:
-                if st.button("🔨 Bloquear", type="primary", use_container_width=True):
-                    if target_bloqueo and target_origen:
-                        from core.router_api import RouterManager
-                        router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
-                        if router.connect()[0]:
-                            with st.spinner(f"Inyectando Escudo SOC en {vendor}..."):
-                                exito, msj = router.create_advanced_block(block_type, target_bloqueo, comentario or "Bloqueo SOC", target_origen)
-                                if exito:
-                                    st.success(msj)
-                                    add_log(f"Intervención: {block_type} -> {target_bloqueo} ({target_origen})", "SUCCESS")
-                                    # Persistir en DB
-                                    _save_block_to_db(
-                                        router_id=router_db.id,
-                                        ip=target_origen if target_origen != "Todos" else "",
-                                        mac="",
-                                        hostname="",
-                                        connection_type="Firewall",
-                                        block_type=block_type[:50],
-                                        target=target_bloqueo,
-                                        reason=comentario or "Bloqueo SOC",
-                                        blocked_by=st.session_state.get('username', 'admin'),
-                                        rule_ids=[]
-                                    )
-                                    st.session_state['telemetria'] = None
-                                    st.rerun()
-                                else:
-                                    st.error(msj)
-                                    add_log(f"Fallo en Intervención: {msj}", "ERROR")
-                            router.disconnect()
+            vendor = getattr(router_db, 'vendor', 'MikroTik').upper()
+            
+            st.markdown("#### 1. Perfil del Objetivo (¿Qué deseas bloquear?)")
+            
+            # Contenedor para alerta dinámica pre-selección
+            alerta_kill = st.empty()
+            
+            c_tipo, c_target, c_extra = st.columns(3, vertical_alignment="bottom")
+            
+            with c_tipo:
+                block_type = st.selectbox("Categoría de Restricción:", 
+                                         ["Corte Total de Internet (Kill Switch)", 
+                                          "Página Web / Red Social (Address List)", 
+                                          "IP / Subred (Drop Específico)", 
+                                          "Puerto (Ej: 22, 3389, 445)"])
+            
+            sub_red_social = None
+            target_bloqueo = ""
+            
+            if "Corte Total" in block_type:
+                alerta_kill.error(":material/security: **ATENCIÓN ANALISTA (Kill Switch):** Está configurando un corte radical que bloqueará ciegamente todo el tráfico hacia/desde el exterior.")
+                target_bloqueo = "0.0.0.0/0"
+                with c_target:
+                    st.text_input("Objetivo Estricto:", value="0.0.0.0/0 (Todo el tráfico)", disabled=True)
+                with c_extra:
+                    pass
+                    
+            elif "Página Web" in block_type:
+                with c_target:
+                    sub_red_social = st.selectbox("Catálogo Frecuente (L7):", ["Manual (Escribir dominio)", "WhatsApp", "YouTube", "Facebook", "TikTok", "Instagram", "Netflix"])
+                with c_extra:
+                    if sub_red_social == "Manual (Escribir dominio)":
+                        target_bloqueo = st.text_input("Dominio DNS (Manual):", placeholder="Ej: zoom.us")
                     else:
-                        if not target_bloqueo:
-                            st.error("⚠️ Debes ingresar un objetivo (IP, Dominio o Puerto).")
-                        if not target_origen:
-                            st.error("⚠️ Debes seleccionar o ingresar un origen (IP o red).")
+                        target_bloqueo = sub_red_social.lower() + ".com"
+                        st.text_input("Target URL:", value=f"*.{target_bloqueo}", disabled=True)
+            else:
+                placeholder = "Red / IP (Ej: 192.168.1.10 o 10.0.0.0/24)" if "IP / Subred" in block_type else "Puerto Destino (Ej: 80, 443)"
+                label_target = "Destino (Address):" if "IP / Subred" in block_type else "Puerto Local o Remoto:"
+                with c_target:
+                    target_bloqueo = st.text_input(label_target, placeholder=placeholder)
+                with c_extra:
+                    # Relleno vacío para estabilizar la tabla
+                    pass
+
+            st.markdown("#### 2. Vector de Aplicación (¿A quién afecta?)")
+            col_origen, col_comentario, col_btn = st.columns([1.5, 1, 1], vertical_alignment="bottom")
+            with col_origen:
+                scope_type = st.selectbox("Radio de Acción:", ["A una IP Específica (Solo un equipo)", "A un Grupo (Una Subred entera)", "Toda la red (Bloqueo Global)"])
+                
+                if "Toda la red" in scope_type:
+                    target_origen = "Todos"
+                    st.text_input("Origen:", value="Afecta a todo el mundo", disabled=True)
+                elif "IP Específica" in scope_type:
+                    ips_activas = set()
+                    for arp in datos.get('arp_table', []):
+                        if isinstance(arp, dict) and arp.get('address'): 
+                            ips_activas.add(arp['address'] + " (ARP)")
+                    for vpn in datos.get('vpns', []):
+                        if isinstance(vpn, dict) and vpn.get('address'): 
+                            ips_activas.add(vpn['address'] + " (VPN)")
+                    for dhcp in datos.get('dhcp', []):
+                        if isinstance(dhcp, dict) and dhcp.get('status') == 'bound' and dhcp.get('address'): 
+                            ips_activas.add(dhcp['address'] + f" (DHCP {dhcp.get('host-name', '')})")
+                    
+                    opciones = ["-- Seleccionar Host Seguro --"] + sorted(list(ips_activas)) + ["Escribir IP Manualmente..."]
+                    seleccion = st.selectbox("IP del Dispositivo a intervenir:", opciones)
+                    
+                    if seleccion == "Escribir IP Manualmente...":
+                        target_origen = st.text_input("Ingresa la IP Manual:", placeholder="Ej: 192.168.10.55")
+                    else:
+                        target_origen = "" if seleccion == "-- Seleccionar Host Seguro --" else seleccion.split(" (")[0]
+                else:
+                    redes = set()
+                    for net in datos.get('local_networks', []):
+                        if isinstance(net, dict) and net.get('network'): 
+                            redes.add(net['network'] + " (Rango Completo LAN)")
+                    
+                    opciones = ["-- Seleccionar Subred CIDR --"] + sorted(list(redes)) + ["Especificar CIDR Manual..."]
+                    seleccion = st.selectbox("Selecciona la Subred a limitar:", opciones)
+                    
+                    if seleccion == "Especificar CIDR Manual...":
+                        target_origen = st.text_input("Ingresa Segmento CIDR:", placeholder="Ej: 172.16.0.0/20 (Afecta a todos)")
+                    else:
+                        target_origen = "" if seleccion == "-- Seleccionar Subred CIDR --" else seleccion.split(" (")[0]
+            
+            with col_comentario:
+                comentario = st.text_input("Comentario Forense (Opcional):", placeholder="Ej: Aislamiento preventivo (SOC)")
+            
+            with col_btn:
+                btn_ping, btn_block = st.columns([1, 1.5], vertical_alignment="bottom")
+                
+                with btn_ping:
+                    if st.button(":material/router: Ping", use_container_width=True):
+                        if target_origen and target_origen != "Todos":
+                            from core.network_scanner import scan_network_scapy
+                            ip_raw = target_origen.split(' (')[0].strip()
+                            if scan_network_scapy(ip_raw):
+                                st.toast(f":material/task_alt: Host {ip_raw} online.")
+                            else:
+                                st.toast(f":material/cancel: Host {ip_raw} offline.")
+                        else:
+                            st.warning("Selecciona IP.")
+
+                with btn_block:
+                    if st.button(":material/front_hand: EJECUTAR", type="primary", use_container_width=True):
+                        if target_bloqueo and target_origen:
+                            from core.router_api import RouterManager
+                            router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
+                            if router.connect()[0]:
+                                with st.spinner(f"Inyectando Escudo SOC en {vendor}..."):
+                                    exito, msj = router.create_advanced_block(block_type, target_bloqueo, comentario or "Bloqueo SOC", target_origen)
+                                    if exito:
+                                        st.success(msj)
+                                        # Persistir en DB
+                                        _save_block_to_db(router_db.id, target_origen if target_origen != "Todos" else "", "", "", "Firewall", block_type[:50], target_bloqueo, comentario or "Bloqueo SOC", st.session_state.get('username', 'admin'), [])
+                                        st.session_state['telemetria'] = None
+                                        st.rerun()
+                                    else:
+                                        st.error(msj)
+                                router.disconnect()
+                        else:
+                            st.error(":material/warning_amber: Faltan parámetros objetivo u origen.")
 
         # Gestión de Restricciones Activas (Cuarentena)
-            # --- NUEVAS OPCIONES DE LIMPIEZA MASIVA ---
-            st.markdown("#### 🧹 Acciones Masivas")
-            c_mass1, c_mass2 = st.columns(2)
+        st.markdown("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown("### :material/lock_open: Auditoría y Revocación de Reglas (Desbloqueos)")
+            st.caption("Inspecciona y retira instantáneamente las contenciones inyectadas.")
+            st.markdown("---")
             
-            with c_mass1:
-                # Extraer IPs únicas con reglas activas
-                ips_activas = sorted(list(set([b['target'].split('(')[-1].replace('Origen: ', '').replace(')', '').strip() 
-                                             for b in blacklist if 'Origen:' in b['target']])))
-                col_sel_mass, col_btn_mass = st.columns([2,1])
-                ip_clean_mass = col_sel_mass.selectbox("Limpiar Host:", ["-- Seleccionar --"] + ips_activas, label_visibility="collapsed")
-                if col_btn_mass.button("🚿 Limpiar Host", use_container_width=True):
-                    if ip_clean_mass != "-- Seleccionar --":
+            # --- PURGADO POR HOST ---
+            st.markdown("#### :material/person_remove: Purgado por Terminal (Host Específico)")
+            st.caption("Retira TODAS las reglas, bloqueos totales y filtros DNS asociados únicamente a una IP particular.")
+            
+            ips_activas = sorted(list(set([b['target'].split('(')[-1].replace('Origen: ', '').replace(')', '').strip() 
+                                         for b in blacklist if 'Origen:' in b['target']])))
+            
+            c_host_sel, c_host_btn = st.columns([3, 1])
+            with c_host_sel:
+                ip_clean_mass = st.selectbox("Seleccionar Terminal (Host IP):", ["-- Seleccionar Host --"] + ips_activas, label_visibility="collapsed")
+            with c_host_btn:
+                if st.button(":material/mop: Limpiar Perfil Completamente", use_container_width=True):
+                    if ip_clean_mass != "-- Seleccionar Host --":
                          from core.router_api import RouterManager
                          router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
                          if router.connect()[0]:
@@ -501,38 +536,31 @@ def render_tactical_console(router_db, datos):
                                  if exito: st.success(msj); st.session_state['telemetria'] = None; st.rerun()
                                  else: st.error(msj)
                              router.disconnect()
+                    else:
+                        st.warning(":material/warning_amber: Seleccione una IP para limpiar.")
 
-            with c_mass2:
-                 if st.button("🧨 LIMPIEZA TOTAL SOC", type="primary", use_container_width=True, 
-                              help="Elimina TODAS las reglas y listas SOC inyectadas en este Router"):
-                      from core.router_api import RouterManager
-                      router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
-                      if router.connect()[0]:
-                          with st.spinner("Purgando Firewall..."):
-                              exito, msj = router.unblock_all_soc_rules()
-                              if exito: st.success(msj); st.session_state['telemetria'] = None; st.rerun()
-                              else: st.error(msj)
-                          router.disconnect()
-            
             st.markdown("---")
+            
             # --- GESTIÓN INDIVIDUAL ---
-            st.markdown("#### 🧩 Gestión Individual de Reglas")
+            st.markdown("#### :material/extension: Gestión Granular de Políticas")
+            st.caption("Inspecciona y retira una regla de contención o filtrado exacta de la tabla NetFilter.")
+            
             col_bl, col_btn_bl = st.columns([3, 1])
             with col_bl:
                 opciones_bl = {f"{b['target']} — {b['comment']}": (b['id'], b.get('type', 'address-list')) for b in blacklist}
                 item_liberar = st.selectbox(
-                    "Seleccionar Bloqueo a Levantar / Deshacer:",
-                    ["-- Seleccionar --"] + list(opciones_bl.keys()),
+                    "Seleccionar Política a Retirar Exactamente:",
+                    ["-- Seleccionar Regla --"] + list(opciones_bl.keys()),
                     label_visibility="collapsed", key="bl_individual_select"
                 )
             with col_btn_bl:
-                if st.button("✅ Levantar Bloqueo", use_container_width=True, key="btn_bl_indiv"):
-                    if item_liberar != "-- Seleccionar --":
+                if st.button(":material/task_alt: Levantar Bloqueo", use_container_width=True, key="btn_bl_indiv"):
+                    if item_liberar != "-- Seleccionar Regla --":
                         from core.router_api import RouterManager
                         target_id, tipo_regla = opciones_bl[item_liberar]
                         router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
                         if router.connect()[0]:
-                            with st.spinner("Removiendo regla del Firewall..."):
+                            with st.spinner("Removiendo regla del Kernel L3..."):
                                 exito, msj = router.unblock_ip(target_id, rule_type=tipo_regla)
                                 if exito:
                                     st.success(msj)
@@ -544,11 +572,30 @@ def render_tactical_console(router_db, datos):
                                     add_log(f"Fallo al levantar restricción: {msj}", "ERROR")
                             router.disconnect()
                     else:
-                        st.warning("⚠️ Selecciona una regla o restricción de la lista.")
+                        st.warning(":material/warning_amber: Selecciona una regla o restricción de la lista.")
+
+            st.markdown("---")
+            
+            # --- LIMPIEZA TOTAL SOC ---
+            st.markdown("#### :material/bomb: Reseteo Total de Infraestructura SOC")
+            st.caption("⚠️ **Peligro Analista:** Elimina de forma sistemática e inmediata TODAS las reglas defensivas y listas estratégicas activas inyectadas por este sistema.")
+            
+            col_bomb_pad1, col_bomb, col_bomb_pad2 = st.columns([1, 2, 1])
+            with col_bomb:
+                 if st.button(":material/bomb: EJECUTAR LIMPIEZA TOTAL DE REGLAS", type="primary", use_container_width=True):
+                      from core.router_api import RouterManager
+                      router = RouterManager(router_db.ip_address, router_db.api_user, router_db.api_pass_encrypted)
+                      if router.connect()[0]:
+                          with st.spinner("Purgando Firewall del Núcleo..."):
+                              exito, msj = router.unblock_all_soc_rules()
+                              if exito: st.success(msj); st.session_state['telemetria'] = None; st.rerun()
+                              else: st.error(msj)
+                          router.disconnect()
+
         
         # --- MONITOR DE EFECTIVIDAD EN TIEMPO REAL ---
         st.markdown("---")
-        st.markdown("### 📈 Efectividad del Bloqueo en Tiempo Real")
+        st.markdown("### :material/trending_up: Métrica de Efectividad de Reglas Activas (Drop Rate)")
         st.caption("Tráfico y peticiones denegadas instantáneamente por las reglas inyectadas desde este panel.")
         blacklist_data = datos.get('blacklist', [])
         stats = []
@@ -584,16 +631,16 @@ def render_tactical_console(router_db, datos):
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(df_stats, hide_index=True, use_container_width=True)
         else:
-            st.info("⏱️ Aún no hay registros de navegación interceptada o el dashboard está sincronizando...")
+            st.info(":material/timer: Aún no hay registros de navegación interceptada o el dashboard está sincronizando...")
 
         # Auditoria de Capa 2
         st.markdown("---")
-        st.markdown("### 🔍 Auditoría de Capa 2 (Detección Scapy)")
+        st.markdown("### :material/search: Auditoría de Capa 2 (Detección Scapy)")
         col_s1, col_s2 = st.columns(2)
         
         with col_s1:
             with st.container(border=True):
-                st.markdown("#### Monitor Anti-ARP Spoofing")
+                st.markdown("#### Motor Anti-Spoofing (Capa 2)")
                 current_arp = datos.get('arp_table', {})
                 prev_arp = st.session_state.get('prev_arp_table', {})
                 
@@ -601,10 +648,10 @@ def render_tactical_console(router_db, datos):
                     anomalies = detect_arp_anomalies(prev_arp, current_arp)
                     if anomalies:
                         criticals = [a for a in anomalies if a['severidad'] == 'CRÍTICO']
-                        if criticals: st.error(f"🔴 {len(criticals)} ALERTA(S) CRÍTICA(S) de suplantación MAC detectada.")
+                        if criticals: st.error(f":material/error: {len(criticals)} ALERTA(S) CRÍTICA(S) de suplantación MAC detectada.")
                         st.dataframe(pd.DataFrame(anomalies), hide_index=True, use_container_width=True)
                     else:
-                        st.success("✅ Sin anomalías ARP desde la última sincronización.")
+                        st.success(":material/task_alt: Sin anomalías ARP desde la última sincronización.")
                 else:
                     st.info("📋 Se necesita una sincronización adicional para comparar la tabla ARP.")
                 st.session_state['prev_arp_table'] = current_arp.copy()
@@ -614,7 +661,7 @@ def render_tactical_console(router_db, datos):
                 st.markdown("#### Detector de DHCP Rogue")
                 st.caption("Verifica Falsos Servidores lanzando paquetes simulados L2.")
                 if is_scapy_ready():
-                    if st.button("🔍 Escanear Red L2", type="primary", use_container_width=True):
+                    if st.button(":material/search: Escanear Red L2", type="primary", use_container_width=True):
                         with st.spinner("Inyectando paquete broadcast DHCP Discover..."):
                             result = detect_rogue_dhcp(timeout=8)
                         if result.get('alert'):
@@ -626,23 +673,23 @@ def render_tactical_console(router_db, datos):
                         if result.get('servers'):
                             st.dataframe(pd.DataFrame(result['servers']), hide_index=True, use_container_width=True)
                 else:
-                    st.warning("⚠️ Módulo Scapy local no detectado. Instale Npcap.")
+                    st.warning(":material/warning_amber: Módulo Scapy local no detectado. Instale Npcap.")
 
     # ------------------------------------------
     # 4. CONTROL DE ACCESO (BLOQUEO POR DISPOSITIVO) — PERSISTENTE
     # ------------------------------------------
     with tab_devices:
-        st.markdown("### 🚫 Administración de Acceso a la Red")
-        st.caption("Bloquea dispositivos individuales tanto por **Red LAN** como **WiFi**. Los bloqueos se guardan permanentemente y sobreviven recargas de página.")
+        st.markdown("### :material/block: Cuarentena y Aislamiento de Terminales")
+        st.caption("Filtra el acceso L3 (IP) y L2 (MAC) con persistencia en Base de Datos SOC. Sobrevive a reinicios.")
         
         # ----- MÉTRICAS -----
         blocked_db = _get_blocked_devices_from_db(router_db.id)
         
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("📡 LAN Activos", len(datos.get('dhcp', [])))
-        c2.metric("📶 WiFi Activos", len(datos.get('wifi_neighbors', [])))
-        c3.metric("🚫 Bloqueados", len(blocked_db))
-        c4.metric("🌍 VPN Activos", len(datos.get('vpns', [])))
+        c2.metric(":material/wifi_tethering: WiFi Activos", len(datos.get('wifi_neighbors', [])))
+        c3.metric(":material/block: Bloqueados", len(blocked_db))
+        c4.metric(":material/public: VPN Activos", len(datos.get('vpns', [])))
         
         st.markdown("---")
 
@@ -660,19 +707,20 @@ def render_tactical_console(router_db, datos):
         
         for dev in all_devices:
             if dev['ip'] in blocked_ips or dev['mac'] in blocked_macs:
-                dev['estado_bloqueo'] = '🔴 BLOQUEADO'
+                dev['estado_bloqueo'] = ':material/error: BLOQUEADO'
             else:
-                dev['estado_bloqueo'] = '🟢 Permitido'
+                dev['estado_bloqueo'] = ':material/check_circle: Permitido'
         
         if all_devices:
             df_devices = pd.DataFrame(all_devices)
-            cols_show = ['ip', 'mac', 'hostname', 'connection_type', 'status', 'latency', 'signal', 'estado_bloqueo']
+            cols_show = ['ip', 'mac', 'hostname', 'device_role', 'connection_type', 'status', 'latency', 'signal', 'estado_bloqueo']
             cols_available = [c for c in cols_show if c in df_devices.columns]
             df_show = df_devices[cols_available].copy()
             rename_map = {
-                'ip': '🖥️ IP', 'mac': '🔗 MAC', 'hostname': '📛 Hostname',
-                'connection_type': '📡 Tipo Conexión', 'status': '📊 Estado Real', 
-                'latency': '⏱️ Latencia (ms)', 'signal': '📶 Señal', 'estado_bloqueo': '🔒 Acceso'
+                'ip': ':material/desktop_windows: IP', 'mac': ':material/link: MAC', 'hostname': ':material/badge: Nombre/Host',
+                'device_role': '🛠️ Categoría/Rol',
+                'connection_type': '📡 Conexión', 'status': ':material/bar_chart: Estado', 
+                'latency': ':material/timer: Lat (ms)', 'signal': ':material/wifi_tethering: dBm', 'estado_bloqueo': ':material/lock_outline: Acceso'
             }
             df_show.rename(columns={k: v for k, v in rename_map.items() if k in df_show.columns}, inplace=True)
             st.dataframe(df_show, hide_index=True, use_container_width=True, height=300)
@@ -681,9 +729,10 @@ def render_tactical_console(router_db, datos):
         
         # ----- SECCIÓN 2: BLOQUEAR DISPOSITIVO -----
         st.markdown("---")
-        st.markdown("### 🔨 Restringir Acceso a Dispositivo")
+        st.markdown("### :material/gavel: Inyectar Regla de Aislamiento (Isolate Device)")
         
         with st.container(border=True):
+            st.markdown("#### 1. Perfilaje de Dispositivo")
             col_sel, col_tipo, col_reason = st.columns([2, 1, 1])
             
             with col_sel:
@@ -731,7 +780,7 @@ def render_tactical_console(router_db, datos):
             
             with col_action:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚫 APLICAR RESTRICCIÓN", type="primary", use_container_width=True, key="btn_block_device"):
+                if st.button(":material/block: APLICAR RESTRICCIÓN", type="primary", use_container_width=True, key="btn_block_device"):
                     if selected_device != "-- Seleccionar Dispositivo --":
                         parts = selected_device.split(" | ")
                         sel_ip = parts[0].strip()
@@ -796,11 +845,11 @@ def render_tactical_console(router_db, datos):
                         else:
                             st.error("No se pudo conectar al router.")
                     else:
-                        st.error("⚠️ No has seleccionado ningún dispositivo de la lista.")
+                        st.error(":material/warning_amber: No has seleccionado ningún dispositivo de la lista.")
         
         # ----- SECCIÓN 3: DISPOSITIVOS BLOQUEADOS (PERSISTENTE) -----
         st.markdown("---")
-        st.markdown("### 🔴 Dispositivos Bloqueados (Registro Persistente)")
+        st.markdown("### :material/error: Dispositivos Bloqueados (Registro Persistente)")
         st.caption("Esta lista se guarda en la base de datos y **NO desaparece al recargar la página**.")
         
         if blocked_db:
@@ -810,9 +859,9 @@ def render_tactical_console(router_db, datos):
             cols_avail = [c for c in cols_blocked if c in df_blocked.columns]
             df_bl_show = df_blocked[cols_avail].copy()
             rename_bl = {
-                'ip': '🖥️ IP', 'mac': '🔗 MAC', 'hostname': '📛 Hostname',
+                'ip': ':material/desktop_windows: IP', 'mac': ':material/link: MAC', 'hostname': ':material/badge: Hostname',
                 'connection_type': '📡 Tipo', 'reason': '📝 Razón', 
-                'blocked_by': '👤 Bloqueado por', 'created_at': '🕐 Fecha'
+                'blocked_by': ':material/person: Bloqueado por', 'created_at': ':material/access_time: Fecha'
             }
             df_bl_show.rename(columns={k: v for k, v in rename_bl.items() if k in df_bl_show.columns}, inplace=True)
             st.dataframe(df_bl_show, hide_index=True, use_container_width=True)
@@ -855,24 +904,24 @@ def render_tactical_console(router_db, datos):
                         _deactivate_block_in_db(block_info['id'])
                         
                         if success_fw:
-                            st.success(f"✅ Dispositivo {block_info['ip']} / {block_info['mac']} desbloqueado. {msj_fw}")
+                            st.success(f":material/task_alt: Dispositivo {block_info['ip']} / {block_info['mac']} desbloqueado. {msj_fw}")
                             add_log(f"Dispositivo Desbloqueado: {block_info['ip']} / {block_info['mac']}", "SUCCESS")
                         else:
-                            st.warning(f"⚠️ Registro eliminado de DB pero hubo un problema con el firewall: {msj_fw}")
+                            st.warning(f":material/warning_amber: Registro eliminado de DB pero hubo un problema con el firewall: {msj_fw}")
                             add_log(f"Desbloqueo parcial: {block_info['ip']} - {msj_fw}", "WARNING")
                         
                         st.session_state['telemetria'] = None
                         st.rerun()
                     else:
-                        st.error("⚠️ Debes seleccionar un elemento de la lista para proceder.")
+                        st.error(":material/warning_amber: Debes seleccionar un elemento de la lista para proceder.")
         else:
-            st.success("✅ No hay dispositivos bloqueados actualmente. Todos los equipos tienen acceso a la red.")
+            st.success(":material/task_alt: No hay dispositivos bloqueados actualmente. Todos los equipos tienen acceso a la red.")
 
     # ------------------------------------------
     # 5. MÓDULO BACKUP & RECOVERY
     # ------------------------------------------
     with tab_backup:
-        st.markdown("### 🚑 Recuperación ante Desastres")
+        st.markdown("### :material/medical_services: Recuperación ante Desastres")
         st.markdown("Genera y administra copias de seguridad de la configuración del equipo MikroTik.")
 
         st.markdown("---")
@@ -883,7 +932,7 @@ def render_tactical_console(router_db, datos):
         with col_tipo:
             tipo_backup = st.selectbox(
                 "Tipo de Backup:",
-                ["🔒 Binario (.backup)", "📄 Export (.rsc)"],
+                [":material/lock_outline: Binario (.backup)", "📄 Export (.rsc)"],
                 help="Binario: Restauración completa (solo mismo modelo). Export: Texto plano, portátil entre equipos."
             )
         with col_nota:
@@ -972,7 +1021,7 @@ def render_tactical_console(router_db, datos):
         st.markdown("---")
         with st.expander("📖 Guía de Tipos de Backup", expanded=False):
             st.markdown("""
-            | Característica | 🔒 Binario (.backup) | 📄 Export (.rsc) |
+            | Característica | :material/lock_outline: Binario (.backup) | 📄 Export (.rsc) |
             |---|---|---|
             | **Formato** | Archivo binario cifrado | Texto plano (script) |
             | **Restauración** | Solo en el mismo modelo de equipo | Portátil entre modelos |
@@ -982,29 +1031,203 @@ def render_tactical_console(router_db, datos):
             """)
 
     # ==========================================
-    # SOC AUDIT LOGS (PERSISTENTES)
-    # ==========================================
-    st.markdown("---")
-    st.markdown("### 📜 Registro de Auditoría SOC (Logs Persistentes)")
-    st.caption("Los logs se guardan en la base de datos y **persisten entre sesiones y recargas**.")
-    
-    col_logs_session, col_logs_db = st.tabs(["📝 Sesión Actual", "🗄️ Historial Completo (DB)"])
-    
-    with col_logs_session:
-        if st.session_state.get('soc_logs'):
-            log_text = "\n".join(st.session_state['soc_logs'])
-            st.code(log_text, language="text")
-            if st.button("🗑️ Limpiar Logs de Sesión", key="clear_session_logs"):
-                st.session_state['soc_logs'] = []
-                st.rerun()
-        else:
-            st.info("No hay acciones tácticas registradas en esta sesión.")
-    
-    with col_logs_db:
-        db_logs = _get_soc_logs(router_db.id, limit=200)
-        if db_logs:
-            st.markdown(f"**{len(db_logs)}** registros encontrados en la base de datos.")
-            log_text_db = "\n".join(db_logs)
-            st.code(log_text_db, language="text")
-        else:
-            st.info("No hay logs persistentes almacenados aún.")
+    # SOC AUDIT LOGS — HISTORIAL INTERACTIVO DEL FIREWALL
+    with tab_logs:
+        # ==========================================
+        st.markdown("---")
+        st.markdown("### 📜 Historial del Firewall SOC — Audit Log Interactivo")
+        st.caption("Registro cronológico persistente de todas las acciones ejecutadas desde este panel. Sobrevive a reinicios y recarga de página.")
+
+        col_logs_session, col_logs_db = st.tabs([
+            "📝 Sesión Actual",
+            "🗄️ Historial Completo (DB)"
+        ])
+
+        with col_logs_session:
+            if st.session_state.get('soc_logs'):
+                log_text = "\n".join(st.session_state['soc_logs'])
+                st.code(log_text, language="text")
+                if st.button("🗑️ Limpiar Logs de Sesión", key="clear_session_logs"):
+                    st.session_state['soc_logs'] = []
+                    st.rerun()
+            else:
+                st.info("No hay acciones tácticas registradas en esta sesión.")
+
+        with col_logs_db:
+            db_logs_raw = _get_soc_logs_raw(router_db.id, limit=300)
+
+            if not db_logs_raw:
+                st.info("No hay logs persistentes almacenados aún.")
+            else:
+                # ── Métricas globales del historial ────────────────────────────
+                total_logs = len(db_logs_raw)
+                critical_logs = [l for l in db_logs_raw if l.get('status') in ('CRITICAL', 'ERROR', 'DANGER')]
+                success_logs  = [l for l in db_logs_raw if l.get('status') in ('SUCCESS', 'OK')]
+                warning_logs  = [l for l in db_logs_raw if l.get('status') in ('WARNING', 'WARN')]
+
+                mc1, mc2, mc3, mc4 = st.columns(4)
+                mc1.metric("📊 Total Acciones", total_logs)
+                mc2.metric("🟢 Exitosas", len(success_logs), delta=f"+{len(success_logs)} ok")
+                mc3.metric("🟡 Avisos", len(warning_logs))
+                mc4.metric("🔴 Críticos", len(critical_logs),
+                           delta=f"-{len(critical_logs)}" if critical_logs else None,
+                           delta_color="inverse")
+
+                st.markdown("---")
+
+                # ── Filtros interactivos ─────────────────────────────────────
+                f1, f2, f3 = st.columns([2, 1, 1])
+                with f1:
+                    search_term = st.text_input(
+                        "🔍 Filtrar por texto:",
+                        placeholder="IP, acción, usuario...",
+                        label_visibility="collapsed"
+                    )
+                with f2:
+                    filter_status = st.selectbox(
+                        "Estado:",
+                        ["Todos", "SUCCESS", "WARNING", "ERROR", "CRITICAL", "INFO"],
+                        label_visibility="collapsed"
+                    )
+                with f3:
+                    filter_user = st.selectbox(
+                        "Usuario:",
+                        ["Todos"] + list(set(l.get('user','admin') for l in db_logs_raw)),
+                        label_visibility="collapsed"
+                    )
+
+                # Aplicar filtros
+                filtered = db_logs_raw
+                if search_term:
+                    filtered = [l for l in filtered if search_term.lower() in str(l).lower()]
+                if filter_status != "Todos":
+                    filtered = [l for l in filtered if l.get('status', '').upper() == filter_status]
+                if filter_user != "Todos":
+                    filtered = [l for l in filtered if l.get('user', '') == filter_user]
+
+                st.caption(f"Mostrando **{len(filtered)}** de **{total_logs}** registros.")
+
+                # ── Gráfico de actividad temporal ───────────────────────────
+                if len(filtered) >= 3:
+                    try:
+                        import plotly.express as px
+                        from collections import Counter
+
+                        # Agrupar por hora
+                        hours = []
+                        for l in filtered:
+                            ts = l.get('created_at', '')
+                            if isinstance(ts, str) and len(ts) >= 13:
+                                hours.append(ts[:13])
+                            elif hasattr(ts, 'strftime'):
+                                hours.append(ts.strftime("%Y-%m-%d %H"))
+
+                        if hours:
+                            hour_counts = Counter(hours)
+                            df_activity = pd.DataFrame([
+                                {'Hora': k, 'Acciones': v, 'Estado': 'Actividad'}
+                                for k, v in sorted(hour_counts.items())
+                            ])
+                            fig_activity = go.Figure()
+                            fig_activity.add_trace(go.Bar(
+                                x=df_activity['Hora'],
+                                y=df_activity['Acciones'],
+                                marker_color='#00F0FF',
+                                opacity=0.8,
+                                name='Acciones/hora'
+                            ))
+                            fig_activity.update_layout(
+                                template='plotly_dark', height=140,
+                                margin=dict(l=5, r=5, t=10, b=5),
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                plot_bgcolor='rgba(0,0,0,0)',
+                                yaxis=dict(title='Acciones', gridcolor='rgba(255,255,255,0.04)'),
+                                xaxis=dict(showgrid=False),
+                                showlegend=False
+                            )
+                            st.plotly_chart(fig_activity, use_container_width=True,
+                                            config={'displayModeBar': False})
+                    except Exception:
+                        pass
+
+                # ── Timeline visual de logs ──────────────────────────────────
+                status_cfg = {
+                    'SUCCESS':  {'color': '#00FFAA', 'bg': 'rgba(0,255,170,0.05)',  'border': 'rgba(0,255,170,0.3)',  'icon': '✅'},
+                    'OK':       {'color': '#00FFAA', 'bg': 'rgba(0,255,170,0.05)',  'border': 'rgba(0,255,170,0.3)',  'icon': '✅'},
+                    'WARNING':  {'color': '#FFAA00', 'bg': 'rgba(255,170,0,0.05)',  'border': 'rgba(255,170,0,0.3)',  'icon': '⚠️'},
+                    'WARN':     {'color': '#FFAA00', 'bg': 'rgba(255,170,0,0.05)',  'border': 'rgba(255,170,0,0.3)',  'icon': '⚠️'},
+                    'ERROR':    {'color': '#FF4B4B', 'bg': 'rgba(255,75,75,0.06)',  'border': 'rgba(255,75,75,0.3)',  'icon': '🚨'},
+                    'CRITICAL': {'color': '#FF0044', 'bg': 'rgba(255,0,68,0.08)',   'border': 'rgba(255,0,68,0.4)',   'icon': '🔴'},
+                    'DANGER':   {'color': '#FF6600', 'bg': 'rgba(255,102,0,0.07)', 'border': 'rgba(255,102,0,0.3)',  'icon': '🔥'},
+                    'INFO':     {'color': '#00F0FF', 'bg': 'rgba(0,240,255,0.04)', 'border': 'rgba(0,240,255,0.15)', 'icon': 'ℹ️'},
+                }
+
+                timeline_html = ""
+                for log in filtered[:100]:  # Mostrar máx 100 para rendimiento
+                    status = str(log.get('status', 'INFO')).upper()
+                    cfg = status_cfg.get(status, status_cfg['INFO'])
+                    action = log.get('action', '').replace('<', '&lt;').replace('>', '&gt;')
+                    user = log.get('user', 'admin')
+                    ts = log.get('created_at', '')
+                    details = str(log.get('details', '') or '').replace('<', '&lt;')[:120]
+
+                    if hasattr(ts, 'strftime'):
+                        ts_str = ts.strftime("%d/%m %H:%M:%S")
+                    else:
+                        ts_str = str(ts)[:16] if ts else ''
+
+                    # Detectar tipo de acción para icono extra
+                    action_lower = action.lower()
+                    if any(w in action_lower for w in ['block', 'bloqueo', 'kill', 'drop', 'ban']):
+                        action_icon = '🚫'
+                    elif any(w in action_lower for w in ['unblock', 'libre', 'desbloqueo', 'allow']):
+                        action_icon = '🔓'
+                    elif any(w in action_lower for w in ['vpn', 'túnel', 'tunnel']):
+                        action_icon = '🔐'
+                    elif any(w in action_lower for w in ['backup', 'restore']):
+                        action_icon = '💾'
+                    elif any(w in action_lower for w in ['qos', 'throttle', 'limit']):
+                        action_icon = '⚡'
+                    else:
+                        action_icon = cfg['icon']
+
+                    timeline_html += f"""
+                    <div style="
+                        display:flex; align-items:flex-start; gap:12px;
+                        padding:8px 14px; margin-bottom:4px;
+                        border-radius:8px;
+                        background:{cfg['bg']};
+                        border:1px solid {cfg['border']};
+                        border-left:3px solid {cfg['color']};
+                        animation: fade-in 0.3s ease-out;
+                    ">
+                        <div style="font-size:1.1em; flex-shrink:0; padding-top:2px;">{action_icon}</div>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:12px; color:#ddd; font-family:Inter,sans-serif;">{action}</div>
+                            {'<div style="font-size:10px; color:#666; margin-top:2px;">'+details+'</div>' if details else ''}
+                        </div>
+                        <div style="flex-shrink:0; text-align:right;">
+                            <div style="font-size:10px; color:{cfg['color']}; font-family:JetBrains Mono; font-weight:600;">{status}</div>
+                            <div style="font-size:9px; color:#444; font-family:JetBrains Mono;">{ts_str}</div>
+                            <div style="font-size:9px; color:#555;">@{user}</div>
+                        </div>
+                    </div>"""
+
+                if timeline_html:
+                    st.markdown(
+                        f"<div style='max-height:480px; overflow-y:auto; padding-right:4px;'>{timeline_html}</div>",
+                        unsafe_allow_html=True
+                    )
+
+                # ── Export CSV ──────────────────────────────────────────────
+                st.markdown("---")
+                if st.button("📊 Exportar Historial como CSV", use_container_width=False):
+                    df_export = pd.DataFrame(filtered)
+                    csv_data = df_export.to_csv(index=False, encoding='utf-8')
+                    st.download_button(
+                        label="⬇️ Descargar CSV",
+                        data=csv_data,
+                        file_name=f"soc_firewall_log_{router_db.name}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime='text/csv',
+                        use_container_width=True
+                    )
